@@ -40,10 +40,18 @@ namespace stdex
 
 #if defined(_MSC_VER)
 using std::is_same_v;
+using std::is_nothrow_default_constructible_v;
+using std::is_nothrow_move_constructible_v;
 using std::is_nothrow_move_assignable_v;
+using std::is_default_constructible_v;
+using std::is_trivially_destructible_v;
 #else
 using std::experimental::is_same_v;
+using std::experimental::is_nothrow_default_constructible_v;
+using std::experimental::is_nothrow_move_constructible_v;
 using std::experimental::is_nothrow_move_assignable_v;
+using std::experimental::is_default_constructible_v;
+using std::experimental::is_trivially_destructible_v;
 #endif
 
 using std::enable_if_t;
@@ -153,6 +161,73 @@ struct variant_internal<T[]>
 template <typename T>
 using variant_internal_t = typename variant_internal<T>::type;
 
+template <typename... T>
+using variant_storage = std::aligned_union_t<1, T...>;
+
+template <typename T, typename...>
+struct car
+{
+	using type = T;
+};
+
+template <typename... T>
+using car_t = typename car<T...>::type;
+
+template <bool default_ctor, bool all_trivial_dtor, typename... T>
+struct variant_layout;
+
+template <typename T0, typename... T>
+struct variant_layout<true, true, T0, T...>
+{
+	constexpr variant_layout() noexcept(
+	    is_nothrow_default_constructible_v<T0>)
+	{
+		new (&data) T0;
+	}
+
+	int index = 0;
+	variant_storage<T0, T...> data;
+};
+
+template <typename T0, typename... T>
+struct variant_layout<true, false, T0, T...>
+{
+	constexpr variant_layout() noexcept(
+	    is_nothrow_default_constructible_v<T0>)
+	{
+		new (&data) T0;
+	}
+
+	~variant_layout()
+	{
+	}
+
+	int index = 0;
+	variant_storage<T0, T...> data;
+};
+
+template <typename... T>
+struct variant_layout<false, true, T...>
+{
+	variant_layout() = delete;
+
+	int index = 0;
+	variant_storage<T...> data;
+};
+
+template <typename... T>
+struct variant_layout<false, false, T...>
+{
+	variant_layout() = delete;
+
+	~variant_layout()
+	{
+	}
+
+	int index = 0;
+	variant_storage<T...> data;
+};
+
 }
 
 template <typename... T>
@@ -161,6 +236,20 @@ struct oneof
 	static_assert(detail::and_v<detail::can_be_alternative_v<T>...>,
 	              "an alternative type must not be cv-qualified, "
 	              "reference, function, or array of known bound");
+
+private:
+	using first_type = detail::variant_internal_t<detail::car_t<T...>>;
+
+	detail::variant_layout<is_default_constructible_v<first_type>,
+	               detail::and_v<is_trivially_destructible_v<T>...>,
+	               detail::variant_internal_t<T>...>
+	    rep_;
+};
+
+template <>
+struct oneof<>
+{
+	oneof() = delete;
 };
 
 }
