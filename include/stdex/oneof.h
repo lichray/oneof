@@ -58,6 +58,9 @@ using std::experimental::is_trivially_destructible_v;
 
 using std::enable_if_t;
 
+template <typename... T>
+struct oneof;
+
 struct bad_variant_access : std::exception
 {
 };
@@ -95,7 +98,7 @@ template <typename T>
 struct indirection
 {
 public:
-	indirection() : p_(new T) {}
+	indirection() : p_(new T{}) {}
 
 	indirection(indirection&& other) noexcept : p_(other.p_)
 	{
@@ -152,29 +155,34 @@ template <typename T>
 struct variant_internal
 {
 	using type = typename variant_internal_impl<T>::type;
+	using element_type = T;
 };
 
 template <typename T>
 struct variant_internal<T[]>
 {
 	using type = indirection<T>;
+	using element_type = T;
 };
 
 template <typename T>
 using variant_internal_t = typename variant_internal<T>::type;
 
-template <bool union_default, typename... T>
+template <typename T>
+using variant_element_t = typename variant_internal<T>::element_type;
+
+template <bool union_default, bool trivial_dtor, typename... T>
 union variant_storage_rep;
 
 template <typename T, typename... Ts>
-union variant_storage_rep<true, T, Ts...>
+union variant_storage_rep<true, true, T, Ts...>
 {
 	T first;
 	std::aligned_union_t<1, Ts...> rest;
 };
 
 template <typename T, typename... Ts>
-union variant_storage_rep<false, T, Ts...>
+union variant_storage_rep<false, true, T, Ts...>
 {
 	constexpr variant_storage_rep() noexcept(
 	    is_nothrow_default_constructible_v<T>)
@@ -187,17 +195,121 @@ union variant_storage_rep<false, T, Ts...>
 };
 
 template <typename T, typename... Ts>
+union variant_storage_rep<true, false, T, Ts...>
+{
+	~variant_storage_rep() {}
+
+	T first;
+	std::aligned_union_t<1, Ts...> rest;
+};
+
+template <typename T, typename... Ts>
+union variant_storage_rep<false, false, T, Ts...>
+{
+	constexpr variant_storage_rep() noexcept(
+	    is_nothrow_default_constructible_v<T>)
+	    : first()
+	{
+	}
+
+	~variant_storage_rep() {}
+
+	T first;
+	std::aligned_union_t<1, Ts...> rest;
+};
+
+template <int I, typename... Ts>
+struct choose;
+
+template <typename T, typename... Ts>
+struct choose<0, T, Ts...>
+{
+	using type = T;
+};
+
+template <int I, typename... Ts>
+using choose_t = typename choose<I, Ts...>::type;
+
+template <int I, typename T, typename... Ts>
+struct choose<I, T, Ts...>
+{
+	using type = choose_t<I - 1, Ts...>;
+};
+
+template <typename T, typename... Xs>
+struct directing;
+
+template <typename T, typename... Xs>
+struct directing<T, T, Xs...>
+{
+	static constexpr int value = 0;
+};
+
+template <typename T, typename... Xs>
+constexpr int directing_v = directing<T, Xs...>::value;
+
+template <typename T, typename X, typename... Xs>
+struct directing<T, X, Xs...>
+{
+	static constexpr int value = directing_v<T, Xs...>;
+};
+
+template <typename T>
+struct directing<T>
+{
+	static_assert(alignof(T) == 0, "type not found");
+};
+
+template <typename T, typename V>
+struct find_alternative;
+
+template <typename T, typename... Xs>
+struct find_alternative<T, oneof<Xs...>>
+{
+	static constexpr int value = directing_v<T, variant_element_t<Xs>...>;
+};
+
+template <typename T, typename V>
+constexpr int find_alternative_v = find_alternative<T, V>::value;
+
+template <int I>
+struct index_t : std::integral_constant<int, I>
+{
+};
+
+template <int I>
+constexpr index_t<I> index_c = {};
+
+template <typename T, typename... Ts>
 struct variant_storage
 {
+	constexpr auto& rget(index_t<0>) noexcept { return u_.first; }
+	constexpr auto& rget(index_t<0>) const noexcept { return u_.first; }
+
+	template <int I>
+	decltype(auto) rget(index_t<I>) noexcept
+	{
+		return reinterpret_cast<choose_t<I, T, Ts...>&>(u_.rest);
+	}
+
+	template <int I>
+	decltype(auto) rget(index_t<I>) const noexcept
+	{
+		return reinterpret_cast<choose_t<I, T, Ts...> const&>(u_.rest);
+	}
+
 	variant_storage_rep<is_trivially_default_constructible_v<T> or
 	                        not is_default_constructible_v<T>,
-	                    T, Ts...>
+	                    is_trivially_destructible_v<T>, T, Ts...>
 	    u_;
 };
 
 template <typename T>
 struct variant_storage<T>
 {
+	constexpr auto& rget(index_t<0>) noexcept { return u_; }
+	constexpr auto& rget(index_t<0>) const noexcept { return u_; }
+
 	T u_;
 };
 
@@ -240,12 +352,44 @@ struct oneof
 	              "an alternative type must not be cv-qualified, "
 	              "reference, function, or array of known bound");
 
+	template <typename E>
+	auto get() & -> detail::variant_element_t<E>&
+	{
+		constexpr int i = detail::find_alternative_v<E, oneof>;
+		if (i != rep_.index)
+			throw bad_variant_access{};
+
+		return rep_.data.rget(detail::index_c<i>);
+	}
+
+	template <typename E>
+	auto get() const & -> detail::variant_element_t<E> const&
+	{
+		constexpr int i = detail::find_alternative_v<E, oneof>;
+		if (i != rep_.index)
+			throw bad_variant_access{};
+
+		return rep_.data.rget(detail::index_c<i>);
+	}
+
+	template <typename E>
+	decltype(auto) get() &&
+	{
+		return std::move(get<E>());
+	}
+
+	template <typename E>
+	decltype(auto) get() const &&
+	{
+		return std::move(get<E>());
+	}
+
 private:
 	using first_type = detail::variant_internal_t<detail::car_t<T...>>;
 
-	detail::variant_layout<
-	    detail::and_v<is_trivially_destructible_v<T>...>,
-	    detail::variant_internal_t<T>...>
+	detail::variant_layout<detail::and_v<is_trivially_destructible_v<
+	                           detail::variant_internal_t<T>>...>,
+	                       detail::variant_internal_t<T>...>
 	    rep_;
 };
 

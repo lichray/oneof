@@ -8,6 +8,25 @@ TEST_CASE("default init")
 {
 	stdex::oneof<int, std::string> s;
 	(void)s;
+
+	struct R
+	{
+		stdex::oneof<double, int, R[]> rep;
+	} y;
+	(void)y;
+}
+
+TEST_CASE("value init")
+{
+	stdex::oneof<int, std::string> s{};
+	REQUIRE(s.get<int>() == 0);
+
+	REQUIRE((stdex::oneof<std::string>().get<std::string>()) == "");
+	REQUIRE((stdex::oneof<std::string, int>().get<std::string>()) == "");
+
+	stdex::oneof<long[], std::string> const x{};
+	REQUIRE(x.get<long>() == 0);
+	REQUIRE(std::move(x).get<long>() == 0);
 }
 
 struct HardDefaultNothrow
