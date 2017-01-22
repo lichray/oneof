@@ -33,15 +33,20 @@
 #include <experimental/type_traits>
 #endif
 #include <exception>
+#include <new>
 
 namespace stdex
 {
 
 #if defined(_MSC_VER)
 using std::is_same_v;
+using std::is_nothrow_move_assignable_v;
 #else
 using std::experimental::is_same_v;
+using std::experimental::is_nothrow_move_assignable_v;
 #endif
+
+using std::enable_if_t;
 
 struct bad_variant_access : std::exception
 {
@@ -68,6 +73,85 @@ constexpr bool can_be_alternative_v = is_same_v<std::decay_t<T>, T>;
 
 template <typename T>
 constexpr bool can_be_alternative_v<T[]> = true;
+
+template <typename T>
+struct variant_draft
+{
+	int index;
+	T value;
+};
+
+template <typename T>
+struct indirection
+{
+public:
+	indirection() : p_(new T) {}
+
+	indirection(indirection&& other) noexcept : p_(other.p_)
+	{
+		other.p_ = nullptr;
+	}
+
+	indirection& operator=(indirection&& other) noexcept
+	{
+		this->~indirection();
+		return *new (this) indirection{ std::move(other) };
+	}
+
+	indirection(indirection const& other) : indirection(other.get()) {}
+
+	indirection& operator=(indirection const& other)
+	{
+		get() = other.get();
+		return *this;
+	}
+
+	indirection(T const& v) : p_(new T(v)) {}
+	indirection(T&& v) : p_(new T(std::move(v))) {}
+
+	indirection& operator=(T const&) = delete;
+	indirection& operator=(T&&) = delete;
+
+	~indirection() { delete p_; }
+
+	operator T&() { return this->get(); }
+	operator T const&() const { return this->get(); }
+
+	T& get() { return *p_; }
+	T const& get() const { return *p_; }
+
+private:
+	T* p_;
+};
+
+template <typename T, typename = void>
+struct variant_internal_impl
+{
+	using type = indirection<T>;
+};
+
+template <typename T>
+struct variant_internal_impl<
+    T, enable_if_t<sizeof(variant_draft<T>) <= variant_bufsize and
+                   is_nothrow_move_assignable_v<T>>>
+{
+	using type = T;
+};
+
+template <typename T>
+struct variant_internal
+{
+	using type = typename variant_internal_impl<T>::type;
+};
+
+template <typename T>
+struct variant_internal<T[]>
+{
+	using type = indirection<T>;
+};
+
+template <typename T>
+using variant_internal_t = typename variant_internal<T>::type;
 
 }
 
