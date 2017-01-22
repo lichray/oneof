@@ -146,7 +146,7 @@ struct variant_internal_impl
 template <typename T>
 struct variant_internal_impl<
     T, enable_if_t<sizeof(variant_draft<T>) <= variant_bufsize and
-                   is_nothrow_move_assignable_v<T>>>
+                   is_nothrow_move_constructible_v<T>>>
 {
 	using type = T;
 };
@@ -352,8 +352,12 @@ struct oneof
 	              "an alternative type must not be cv-qualified, "
 	              "reference, function, or array of known bound");
 
+	static_assert(detail::and_v<is_nothrow_move_constructible_v<
+	                  detail::variant_internal_t<T>>...>,
+	              "library is broken, please report bug");
+
 	template <typename E>
-	auto get() & -> detail::variant_element_t<E>&
+	constexpr auto get() & -> detail::variant_element_t<E>&
 	{
 		constexpr int i = detail::find_alternative_v<E, oneof>;
 		if (i != rep_.index)
@@ -363,7 +367,7 @@ struct oneof
 	}
 
 	template <typename E>
-	auto get() const & -> detail::variant_element_t<E> const&
+	constexpr auto get() const & -> detail::variant_element_t<E> const&
 	{
 		constexpr int i = detail::find_alternative_v<E, oneof>;
 		if (i != rep_.index)
@@ -373,20 +377,18 @@ struct oneof
 	}
 
 	template <typename E>
-	decltype(auto) get() &&
+	constexpr decltype(auto) get() &&
 	{
 		return std::move(get<E>());
 	}
 
 	template <typename E>
-	decltype(auto) get() const &&
+	constexpr decltype(auto) get() const &&
 	{
 		return std::move(get<E>());
 	}
 
 private:
-	using first_type = detail::variant_internal_t<detail::car_t<T...>>;
-
 	detail::variant_layout<detail::and_v<is_trivially_destructible_v<
 	                           detail::variant_internal_t<T>>...>,
 	                       detail::variant_internal_t<T>...>
