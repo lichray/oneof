@@ -44,6 +44,7 @@ using std::is_nothrow_default_constructible_v;
 using std::is_nothrow_move_constructible_v;
 using std::is_nothrow_move_assignable_v;
 using std::is_default_constructible_v;
+using std::is_trivially_default_constructible_v;
 using std::is_trivially_destructible_v;
 #else
 using std::experimental::is_same_v;
@@ -51,6 +52,7 @@ using std::experimental::is_nothrow_default_constructible_v;
 using std::experimental::is_nothrow_move_constructible_v;
 using std::experimental::is_nothrow_move_assignable_v;
 using std::experimental::is_default_constructible_v;
+using std::experimental::is_trivially_default_constructible_v;
 using std::experimental::is_trivially_destructible_v;
 #endif
 
@@ -161,8 +163,43 @@ struct variant_internal<T[]>
 template <typename T>
 using variant_internal_t = typename variant_internal<T>::type;
 
-template <typename... T>
-using variant_storage = std::aligned_union_t<1, T...>;
+template <bool union_default, typename... T>
+union variant_storage_rep;
+
+template <typename T, typename... Ts>
+union variant_storage_rep<true, T, Ts...>
+{
+	T first;
+	std::aligned_union_t<1, Ts...> rest;
+};
+
+template <typename T, typename... Ts>
+union variant_storage_rep<false, T, Ts...>
+{
+	constexpr variant_storage_rep() noexcept(
+	    is_nothrow_default_constructible_v<T>)
+	    : first()
+	{
+	}
+
+	T first;
+	std::aligned_union_t<1, Ts...> rest;
+};
+
+template <typename T, typename... Ts>
+struct variant_storage
+{
+	variant_storage_rep<is_trivially_default_constructible_v<T> or
+	                        not is_default_constructible_v<T>,
+	                    T, Ts...>
+	    u_;
+};
+
+template <typename T>
+struct variant_storage<T>
+{
+	T u_;
+};
 
 template <typename T, typename...>
 struct car
@@ -173,53 +210,19 @@ struct car
 template <typename... T>
 using car_t = typename car<T...>::type;
 
-template <bool default_ctor, bool all_trivial_dtor, typename... T>
+template <bool all_trivial_dtor, typename... T>
 struct variant_layout;
 
-template <typename T0, typename... T>
-struct variant_layout<true, true, T0, T...>
-{
-	constexpr variant_layout() noexcept(
-	    is_nothrow_default_constructible_v<T0>)
-	{
-		new (&data) T0;
-	}
-
-	int index = 0;
-	variant_storage<T0, T...> data;
-};
-
-template <typename T0, typename... T>
-struct variant_layout<true, false, T0, T...>
-{
-	constexpr variant_layout() noexcept(
-	    is_nothrow_default_constructible_v<T0>)
-	{
-		new (&data) T0;
-	}
-
-	~variant_layout()
-	{
-	}
-
-	int index = 0;
-	variant_storage<T0, T...> data;
-};
-
 template <typename... T>
-struct variant_layout<false, true, T...>
+struct variant_layout<true, T...>
 {
-	variant_layout() = delete;
-
-	int index = 0;
+	int index;
 	variant_storage<T...> data;
 };
 
 template <typename... T>
-struct variant_layout<false, false, T...>
+struct variant_layout<false, T...>
 {
-	variant_layout() = delete;
-
 	~variant_layout()
 	{
 	}
@@ -240,9 +243,9 @@ struct oneof
 private:
 	using first_type = detail::variant_internal_t<detail::car_t<T...>>;
 
-	detail::variant_layout<is_default_constructible_v<first_type>,
-	               detail::and_v<is_trivially_destructible_v<T>...>,
-	               detail::variant_internal_t<T>...>
+	detail::variant_layout<
+	    detail::and_v<is_trivially_destructible_v<T>...>,
+	    detail::variant_internal_t<T>...>
 	    rep_;
 };
 
