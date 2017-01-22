@@ -41,6 +41,7 @@ namespace stdex
 #if defined(_MSC_VER)
 using std::is_same_v;
 using std::is_nothrow_default_constructible_v;
+using std::is_nothrow_constructible_v;
 using std::is_nothrow_move_constructible_v;
 using std::is_nothrow_move_assignable_v;
 using std::is_default_constructible_v;
@@ -49,6 +50,7 @@ using std::is_trivially_destructible_v;
 #else
 using std::experimental::is_same_v;
 using std::experimental::is_nothrow_default_constructible_v;
+using std::experimental::is_nothrow_constructible_v;
 using std::experimental::is_nothrow_move_constructible_v;
 using std::experimental::is_nothrow_move_assignable_v;
 using std::experimental::is_default_constructible_v;
@@ -251,7 +253,7 @@ constexpr int directing_v = directing<T, Xs...>::value;
 template <typename T, typename X, typename... Xs>
 struct directing<T, X, Xs...>
 {
-	static constexpr int value = directing_v<T, Xs...>;
+	static constexpr int value = directing_v<T, Xs...> + 1;
 };
 
 template <typename T>
@@ -356,8 +358,32 @@ struct oneof
 	                  detail::variant_internal_t<T>>...>,
 	              "library is broken, please report bug");
 
+	template <typename E, typename... Args>
+	E& emplace(Args&&... args)
+	{
+		constexpr int i = detail::find_alternative_v<E, oneof>;
+		using type =
+		    detail::choose_t<i, detail::variant_internal_t<T>...>;
+
+		//get<E>().~E();
+		if (is_nothrow_constructible_v<type, Args...>)
+		{
+			auto p =
+			    new (&rep_.data) type(std::forward<Args>(args)...);
+			rep_.index = i;
+			return *p;
+		}
+		else
+		{
+			type tmp(std::forward<Args>(args)...);
+			auto p = new (&rep_.data) type(std::move(tmp));
+			rep_.index = i;
+			return *p;
+		}
+	}
+
 	template <typename E>
-	constexpr auto get() & -> detail::variant_element_t<E>&
+	constexpr auto get() & -> E&
 	{
 		constexpr int i = detail::find_alternative_v<E, oneof>;
 		if (i != rep_.index)
@@ -367,7 +393,7 @@ struct oneof
 	}
 
 	template <typename E>
-	constexpr auto get() const & -> detail::variant_element_t<E> const&
+	constexpr auto get() const & -> E const&
 	{
 		constexpr int i = detail::find_alternative_v<E, oneof>;
 		if (i != rep_.index)

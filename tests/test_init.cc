@@ -29,6 +29,21 @@ TEST_CASE("value init")
 	REQUIRE(std::move(x).get<long>() == 0);
 }
 
+TEST_CASE("emplace")
+{
+	stdex::oneof<int, std::string> s;
+	auto&& x2 = s.emplace<std::string>("meow");
+
+	REQUIRE(s.get<std::string>() == "meow");
+	REQUIRE(x2 == "meow");
+
+	s.emplace<std::string>(6u, '+');
+	REQUIRE(s.get<std::string>() == "++++++");
+
+	s.emplace<int>(10);
+	REQUIRE(s.get<int>() == 10);
+}
+
 struct HardDefaultNothrow
 {
 	HardDefaultNothrow() noexcept {}
