@@ -41,6 +41,10 @@ TEST_CASE("emplace")
 	auto s2 = std::move(s);
 	REQUIRE(s2.get<std::string>() == "meow");
 
+	auto s3 = s2;
+	REQUIRE(s3.get<std::string>() == "meow");
+	REQUIRE(s2.get<std::string>() == "meow");
+
 	s.emplace<std::string>(6u, '+');
 	REQUIRE(s.get<std::string>() == "++++++");
 	REQUIRE_THROWS_AS(s.get<int>(), std::exception&);

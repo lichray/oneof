@@ -443,6 +443,16 @@ struct oneof
 
 	constexpr oneof() = default;
 
+	oneof(oneof const& other)
+	{
+		detail::rvisit_at(rep_.index = other.rep_.index,
+		                  [&](auto&& ra) {
+			                  using type = noref<decltype(ra)>;
+			                  new (&rep_.data) type(ra);
+			          },
+		                  other.rep_.data);
+	}
+
 	oneof(oneof&& other) noexcept
 	{
 		detail::rvisit_at(rep_.index = other.rep_.index,
