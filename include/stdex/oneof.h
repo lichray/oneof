@@ -41,6 +41,9 @@ namespace stdex
 
 #if defined(_MSC_VER)
 using std::is_same_v;
+using std::is_base_of_v;
+using std::is_convertible_v;
+using std::is_constructible_v;
 using std::is_nothrow_default_constructible_v;
 using std::is_nothrow_constructible_v;
 using std::is_nothrow_copy_constructible_v;
@@ -51,6 +54,9 @@ using std::is_trivially_default_constructible_v;
 using std::is_trivially_destructible_v;
 #else
 using std::experimental::is_same_v;
+using std::experimental::is_base_of_v;
+using std::experimental::is_convertible_v;
+using std::experimental::is_constructible_v;
 using std::experimental::is_nothrow_default_constructible_v;
 using std::experimental::is_nothrow_constructible_v;
 using std::experimental::is_nothrow_copy_constructible_v;
@@ -283,6 +289,65 @@ struct directing<T>
 	static_assert(alignof(T) == 0, "type not found");
 };
 
+template <typename, typename A, typename... Ts>
+struct first_conv_construct
+{
+};
+
+template <typename A, typename T, typename... Ts>
+struct first_conv_construct<
+    enable_if_t<is_constructible_v<T, A> and is_convertible_v<A, T>>, A, T,
+    Ts...>
+{
+	using type = T;
+};
+
+template <typename X, typename A, typename T, typename... Ts>
+struct first_conv_construct<X, A, T, Ts...> : first_conv_construct<X, A, Ts...>
+{
+};
+
+template <typename A, typename... Ts>
+using first_conv_construct_t =
+    typename first_conv_construct<void, A, Ts...>::type;
+
+template <typename, typename A, typename... Ts>
+struct first_self_construct
+{
+};
+
+template <typename A, typename T, typename... Ts>
+struct first_self_construct<
+    enable_if_t<is_constructible_v<T, A> and is_same_v<nocvref<A>, T>>, A, T,
+    Ts...>
+{
+	using type = T;
+};
+
+template <typename X, typename A, typename T, typename... Ts>
+struct first_self_construct<X, A, T, Ts...> : first_self_construct<X, A, Ts...>
+{
+};
+
+template <typename A, typename... Ts>
+using first_self_construct_t =
+    typename first_self_construct<void, A, Ts...>::type;
+
+template <typename, typename A, typename... Ts>
+struct any_self_construct : std::false_type
+{
+};
+
+template <typename A, typename... Ts>
+struct any_self_construct<decltype(void(first_self_construct_t<A, Ts...>{})),
+                          A, Ts...> : std::true_type
+{
+};
+
+template <typename A, typename... Ts>
+constexpr bool any_self_construct_v =
+    any_self_construct<void, A, Ts...>::value;
+
 template <typename T, typename V>
 struct find_alternative;
 
@@ -478,6 +543,35 @@ public:
 		    other.rep_.data);
 	}
 
+	template <typename A, typename Ar = noref<A>,
+	          enable_if_t<not is_base_of_v<oneof, Ar>, int> = 0,
+	          typename E = detail::first_self_construct_t<
+	              A, detail::variant_element_t<T>...>>
+	oneof(A&& a)
+	{
+		constexpr int i = detail::find_alternative_v<E, oneof>;
+		using type = detail::choose_alternative_t<i, oneof>;
+
+		new (&rep_.data) type(std::forward<A>(a));
+		rep_.index = i;
+	}
+
+	template <typename A, typename Ar = noref<A>,
+	          enable_if_t<not is_base_of_v<oneof, Ar>, int> = 0,
+	          enable_if_t<not detail::any_self_construct_v<
+	                          A, detail::variant_element_t<T>...>,
+	                      int> = 0,
+	          typename E = detail::first_conv_construct_t<
+	              A, detail::variant_element_t<T>...>>
+	explicit oneof(A&& a)
+	{
+		constexpr int i = detail::find_alternative_v<E, oneof>;
+		using type = detail::choose_alternative_t<i, oneof>;
+
+		new (&rep_.data) type(std::forward<A>(a));
+		rep_.index = i;
+	}
+
 	oneof& operator=(oneof const& other)
 	{
 		if (not trivial and rep_.index == other.rep_.index)
@@ -572,6 +666,12 @@ public:
 	{
 		return detail::rvisit_at<R>(
 		    rep_.index, overload(std::forward<F>(f)...), rep_.data);
+	}
+
+	template <typename E>
+	constexpr bool is() const noexcept
+	{
+		return rep_.index == detail::find_alternative_v<E, oneof>;
 	}
 
 	template <typename E>
