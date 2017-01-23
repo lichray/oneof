@@ -423,12 +423,7 @@ struct variant_layout<false, T...>
 {
 	~variant_layout()
 	{
-		rvisit_at(index,
-		          [](auto&& a) {
-			          using type = noref<decltype(a)>;
-			          a.~type();
-			  },
-		          data);
+		rvisit_at(index, [](auto&& a) { a.~auto(); }, data);
 	}
 
 	int index = 0;
@@ -460,22 +455,18 @@ public:
 
 	oneof(oneof const& other)
 	{
-		detail::rvisit_at(rep_.index = other.rep_.index,
-		                  [&](auto&& ra) {
-			                  using type = noref<decltype(ra)>;
-			                  new (&rep_.data) type(ra);
-			          },
-		                  other.rep_.data);
+		detail::rvisit_at(
+		    rep_.index = other.rep_.index,
+		    [&](auto&& ra) { new (&rep_.data) auto(ra); },
+		    other.rep_.data);
 	}
 
 	oneof(oneof&& other) noexcept
 	{
-		detail::rvisit_at(rep_.index = other.rep_.index,
-		                  [&](auto&& ra) {
-			                  using type = noref<decltype(ra)>;
-			                  new (&rep_.data) type(std::move(ra));
-			          },
-		                  other.rep_.data);
+		detail::rvisit_at(
+		    rep_.index = other.rep_.index,
+		    [&](auto&& ra) { new (&rep_.data) auto(std::move(ra)); },
+		    other.rep_.data);
 	}
 
 	oneof& operator=(oneof&& other) noexcept(move_through)
