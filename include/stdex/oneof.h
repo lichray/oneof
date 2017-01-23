@@ -335,6 +335,13 @@ struct variant_storage<T>
 	T u_;
 };
 
+template <typename X, typename... Ts>
+decltype(auto) rget(variant_storage<Ts...>& v)
+{
+	constexpr int i = directing_v<X, Ts...>;
+	return v.rget(index_c<i>);
+}
+
 template <typename R, int Low, int High, int Mid = (Low + High) / 2,
           typename = void>
 struct _rvisit_at;
@@ -441,6 +448,14 @@ struct oneof
 	                  detail::variant_internal_t<T>>...>,
 	              "library is broken, please report bug");
 
+private:
+	static constexpr bool trivial = detail::and_v<
+	    is_trivially_destructible_v<detail::variant_internal_t<T>>...>;
+
+	static constexpr bool move_through = detail::and_v<
+	    is_nothrow_move_assignable_v<detail::variant_internal_t<T>>...>;
+
+public:
 	constexpr oneof() = default;
 
 	oneof(oneof const& other)
@@ -461,6 +476,28 @@ struct oneof
 			                  new (&rep_.data) type(std::move(ra));
 			          },
 		                  other.rep_.data);
+	}
+
+	oneof& operator=(oneof&& other) noexcept(move_through)
+	{
+		if (not trivial and rep_.index == other.rep_.index)
+		{
+			detail::rvisit_at(
+			    other.rep_.index,
+			    [&](auto&& ra) {
+				    using type = noref<decltype(ra)>;
+				    detail::rget<type>(rep_.data) =
+				        std::move(ra);
+			    },
+			    other.rep_.data);
+
+			return *this;
+		}
+		else
+		{
+			this->~oneof();
+			return *new (this) oneof{ std::move(other) };
+		}
 	}
 
 	template <typename E, typename... Args>
@@ -520,10 +557,7 @@ struct oneof
 	}
 
 private:
-	detail::variant_layout<detail::and_v<is_trivially_destructible_v<
-	                           detail::variant_internal_t<T>>...>,
-	                       detail::variant_internal_t<T>...>
-	    rep_;
+	detail::variant_layout<trivial, detail::variant_internal_t<T>...> rep_;
 };
 
 template <>
