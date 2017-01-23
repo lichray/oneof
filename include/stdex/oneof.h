@@ -489,13 +489,14 @@ public:
 				    detail::rget<type>(rep_.data) = ra;
 			    },
 			    other.rep_.data);
-
-			return *this;
 		}
 		else if (copy_storage)
 		{
-			this->~oneof();
-			return *new (this) oneof{ other };
+			if (&other != this)
+			{
+				this->~oneof();
+				return *new (this) oneof{ other };
+			}
 		}
 		else
 		{
@@ -508,9 +509,9 @@ public:
 				          },
 			                  other.rep_.data);
 			rep_.index = other.rep_.index;
-
-			return *this;
 		}
+
+		return *this;
 	}
 
 	oneof& operator=(oneof&& other) noexcept(move_through)

@@ -36,6 +36,15 @@ TEST_CASE("value semantics")
 	REQUIRE(s3.get<double>() == 3.14);
 
 	s3 = s;
-
 	REQUIRE(s3.get<std::vector<int>>() == s.get<std::vector<int>>());
+
+	s = s;
+	REQUIRE(s3.get<std::vector<int>>() == s.get<std::vector<int>>());
+
+	using std::swap;
+	s2.emplace<double>(0.5);
+	swap(s, s2);
+
+	REQUIRE(s.get<double>() == 0.5);
+	REQUIRE(s3.get<std::vector<int>>().size() == 2);
 }
