@@ -36,12 +36,15 @@ TEST_CASE("emplace")
 
 	REQUIRE(s.get<std::string>() == "meow");
 	REQUIRE(x2 == "meow");
+	REQUIRE_THROWS(s.get<int>());
 
 	s.emplace<std::string>(6u, '+');
 	REQUIRE(s.get<std::string>() == "++++++");
+	REQUIRE_THROWS_AS(s.get<int>(), std::exception&);
 
 	s.emplace<int>(10);
 	REQUIRE(s.get<int>() == 10);
+	REQUIRE_THROWS_AS(s.get<std::string>(), stdex::bad_variant_access&);
 }
 
 struct HardDefaultNothrow

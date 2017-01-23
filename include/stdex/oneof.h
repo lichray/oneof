@@ -34,6 +34,7 @@
 #endif
 #include <exception>
 #include <new>
+#include <assert.h>
 
 namespace stdex
 {
@@ -285,6 +286,8 @@ constexpr index_t<I> index_c = {};
 template <typename T, typename... Ts>
 struct variant_storage
 {
+	static constexpr int size = sizeof...(Ts) + 1;
+
 	constexpr auto& rget(index_t<0>) noexcept { return u_.first; }
 	constexpr auto& rget(index_t<0>) const noexcept { return u_.first; }
 
@@ -309,11 +312,70 @@ struct variant_storage
 template <typename T>
 struct variant_storage<T>
 {
+	static constexpr int size = 1;
+
 	constexpr auto& rget(index_t<0>) noexcept { return u_; }
 	constexpr auto& rget(index_t<0>) const noexcept { return u_; }
 
 	T u_;
 };
+
+template <typename R, int Low, int High, int Mid = (Low + High) / 2,
+          typename = void>
+struct _rvisit_at;
+
+template <typename R, int Low, int High, int Mid>
+struct _rvisit_at<R, Low, High, Mid, std::enable_if_t<(Low > High)>>
+{
+	template <typename... T>
+	[[noreturn]] static R apply(int, T&&...)
+	{
+#if !defined(NDEBUG)
+		assert(0);
+#elif defined(MSVC)
+		__assume(0);
+#else
+		__builtin_unreachable();
+#endif
+	}
+};
+
+template <typename R, int Mid>
+struct _rvisit_at<R, Mid, Mid, Mid>
+{
+	template <typename Raw, typename F>
+	static decltype(auto) apply(int n, F&& f, Raw&& tp)
+	{
+		return std::forward<F>(f)(
+		    std::forward<Raw>(tp).rget(index_c<Mid>));
+	}
+};
+
+template <typename R, int Low, int High, int Mid>
+struct _rvisit_at<R, Low, High, Mid, enable_if_t<(Low < High)>>
+{
+	template <typename... T>
+	static decltype(auto) apply(int n, T&&... t)
+	{
+		if (n < Mid)
+			return _rvisit_at<R, Low, Mid - 1>::apply(
+			    n, std::forward<T>(t)...);
+		else if (n == Mid)
+			return _rvisit_at<R, Mid, Mid>::apply(
+			    n, std::forward<T>(t)...);
+		else
+			return _rvisit_at<R, Mid + 1, High>::apply(
+			    n, std::forward<T>(t)...);
+	}
+};
+
+template <typename R = void, typename Raw, typename F>
+inline decltype(auto) rvisit_at(int n, F&& f, Raw&& tp)
+{
+	constexpr int m = std::remove_reference_t<Raw>::size;
+	return _rvisit_at<R, 0, m - 1>::apply(n, std::forward<F>(f),
+	                                      std::forward<Raw>(tp));
+}
 
 template <typename T, typename...>
 struct car
@@ -339,6 +401,12 @@ struct variant_layout<false, T...>
 {
 	~variant_layout()
 	{
+		rvisit_at(index,
+		          [](auto&& a) {
+			          using type = std::decay_t<decltype(a)>;
+			          a.~type();
+			  },
+		          data);
 	}
 
 	int index = 0;
@@ -365,9 +433,9 @@ struct oneof
 		using type =
 		    detail::choose_t<i, detail::variant_internal_t<T>...>;
 
-		//get<E>().~E();
 		if (is_nothrow_constructible_v<type, Args...>)
 		{
+			this->~oneof();
 			auto p =
 			    new (&rep_.data) type(std::forward<Args>(args)...);
 			rep_.index = i;
@@ -376,6 +444,7 @@ struct oneof
 		else
 		{
 			type tmp(std::forward<Args>(args)...);
+			this->~oneof();
 			auto p = new (&rep_.data) type(std::move(tmp));
 			rep_.index = i;
 			return *p;
