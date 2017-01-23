@@ -560,6 +560,20 @@ public:
 		}
 	}
 
+	template <typename R = void, typename... F>
+	decltype(auto) match(F&&... f)
+	{
+		return detail::rvisit_at<R>(
+		    rep_.index, overload(std::forward<F>(f)...), rep_.data);
+	}
+
+	template <typename R = void, typename... F>
+	decltype(auto) match(F&&... f) const
+	{
+		return detail::rvisit_at<R>(
+		    rep_.index, overload(std::forward<F>(f)...), rep_.data);
+	}
+
 	template <typename E>
 	constexpr auto get() & -> E&
 	{

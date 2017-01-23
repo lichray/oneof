@@ -32,38 +32,41 @@ namespace stdex
 namespace detail
 {
 
-template <class... Fs>
+template <typename... Fs>
 struct overloaded;
 
-template <class F1, class... Fs>
-struct overloaded<F1, Fs...> : F1, overloaded<Fs...>::type
+template <typename F, typename... Fs>
+struct overloaded<F, Fs...> : F, overloaded<Fs...>::type
 {
-	typedef overloaded type;
+	using type = overloaded;
+	using base = typename overloaded<Fs...>::type;
 
-	constexpr overloaded(F1&& head, Fs&&... tail)
-	    : F1(std::forward<F1>(head)),
-	      overloaded<Fs...>::type(std::forward<Fs>(tail)...)
+	template <typename T, typename... Ts,
+	          typename Ft = std::remove_reference_t<T>,
+	          typename = std::enable_if_t<
+	              !std::is_base_of<overloaded, Ft>::value>>
+	constexpr overloaded(T&& head, Ts&&... tail)
+	    : F(std::forward<T>(head)), base(std::forward<Ts>(tail)...)
 	{
 	}
 
-	using F1::operator();
-	using overloaded<Fs...>::type::operator();
+	using F::operator();
+	using base::operator();
 };
 
-template <class F>
+template <typename F>
 struct overloaded<F> : F
 {
-	typedef F type;
+	using type = F;
 	using F::operator();
 };
 
 }
 
-template <class... Fs>
-constexpr
-typename detail::overloaded<Fs...>::type overload(Fs... x)
+template <typename... Fs>
+constexpr auto overload(Fs&&... x)
 {
-	return detail::overloaded<Fs...>(x...);
+	return detail::overloaded<std::decay_t<Fs>...>(std::forward<Fs>(x)...);
 }
 
 }
