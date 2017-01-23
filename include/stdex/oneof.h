@@ -43,6 +43,7 @@ namespace stdex
 using std::is_same_v;
 using std::is_nothrow_default_constructible_v;
 using std::is_nothrow_constructible_v;
+using std::is_nothrow_copy_constructible_v;
 using std::is_nothrow_move_constructible_v;
 using std::is_nothrow_move_assignable_v;
 using std::is_default_constructible_v;
@@ -52,6 +53,7 @@ using std::is_trivially_destructible_v;
 using std::experimental::is_same_v;
 using std::experimental::is_nothrow_default_constructible_v;
 using std::experimental::is_nothrow_constructible_v;
+using std::experimental::is_nothrow_copy_constructible_v;
 using std::experimental::is_nothrow_move_constructible_v;
 using std::experimental::is_nothrow_move_assignable_v;
 using std::experimental::is_default_constructible_v;
@@ -70,6 +72,9 @@ struct bad_variant_access : std::exception
 
 template <typename U>
 using noref = std::remove_reference_t<U>;
+
+template <typename U>
+using nocvref = std::remove_cv_t<noref<U>>;
 
 namespace detail
 {
@@ -439,16 +444,20 @@ struct oneof
 	              "an alternative type must not be cv-qualified, "
 	              "reference, function, or array of known bound");
 
-	static_assert(detail::and_v<is_nothrow_move_constructible_v<
-	                  detail::variant_internal_t<T>>...>,
-	              "library is broken, please report bug");
-
 private:
 	static constexpr bool trivial = detail::and_v<
 	    is_trivially_destructible_v<detail::variant_internal_t<T>>...>;
 
+	static constexpr bool move_storage = detail::and_v<
+	    is_nothrow_move_constructible_v<detail::variant_internal_t<T>>...>;
+
+	static constexpr bool copy_storage = detail::and_v<
+	    is_nothrow_copy_constructible_v<detail::variant_internal_t<T>>...>;
+
 	static constexpr bool move_through = detail::and_v<
 	    is_nothrow_move_assignable_v<detail::variant_internal_t<T>>...>;
+
+	static_assert(move_storage, "library is broken, please report bug");
 
 public:
 	constexpr oneof() = default;
@@ -467,6 +476,41 @@ public:
 		    rep_.index = other.rep_.index,
 		    [&](auto&& ra) { new (&rep_.data) auto(std::move(ra)); },
 		    other.rep_.data);
+	}
+
+	oneof& operator=(oneof const& other)
+	{
+		if (not trivial and rep_.index == other.rep_.index)
+		{
+			detail::rvisit_at(
+			    other.rep_.index,
+			    [&](auto&& ra) {
+				    using type = nocvref<decltype(ra)>;
+				    detail::rget<type>(rep_.data) = ra;
+			    },
+			    other.rep_.data);
+
+			return *this;
+		}
+		else if (copy_storage)
+		{
+			this->~oneof();
+			return *new (this) oneof{ other };
+		}
+		else
+		{
+			detail::rvisit_at(other.rep_.index,
+			                  [&](auto&& ra) {
+				                  auto tmp = ra;
+				                  this->~oneof();
+				                  new (&rep_.data) auto(
+				                      std::move(tmp));
+				          },
+			                  other.rep_.data);
+			rep_.index = other.rep_.index;
+
+			return *this;
+		}
 	}
 
 	oneof& operator=(oneof&& other) noexcept(move_through)

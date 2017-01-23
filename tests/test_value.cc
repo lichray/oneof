@@ -23,4 +23,19 @@ TEST_CASE("value semantics")
 	s = std::move(s2);
 
 	REQUIRE(s.get<double>() == 3.14);
+
+	s2 = s;
+
+	REQUIRE(s2.get<double>() == 3.14);
+	REQUIRE(s.get<double>() == 3.14);
+
+	auto s3 = s;
+	s.emplace<std::vector<int>>(2u, 42);
+
+	REQUIRE(s.get<std::vector<int>>().size() == 2);
+	REQUIRE(s3.get<double>() == 3.14);
+
+	s3 = s;
+
+	REQUIRE(s3.get<std::vector<int>>() == s.get<std::vector<int>>());
 }
