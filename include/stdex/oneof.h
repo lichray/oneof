@@ -68,6 +68,9 @@ struct bad_variant_access : std::exception
 {
 };
 
+template <typename U>
+using noref = std::remove_reference_t<U>;
+
 namespace detail
 {
 
@@ -239,6 +242,18 @@ struct choose<I, T, Ts...>
 	using type = choose_t<I - 1, Ts...>;
 };
 
+template <int I, typename V>
+struct choose_alternative;
+
+template <int I, typename... Ts>
+struct choose_alternative<I, oneof<Ts...>>
+{
+	using type = choose_t<I, variant_internal_t<Ts>...>;
+};
+
+template <int I, typename V>
+using choose_alternative_t = typename choose_alternative<I, V>::type;
+
 template <typename T, typename... Xs>
 struct directing;
 
@@ -403,7 +418,7 @@ struct variant_layout<false, T...>
 	{
 		rvisit_at(index,
 		          [](auto&& a) {
-			          using type = std::decay_t<decltype(a)>;
+			          using type = noref<decltype(a)>;
 			          a.~type();
 			  },
 		          data);
@@ -426,12 +441,23 @@ struct oneof
 	                  detail::variant_internal_t<T>>...>,
 	              "library is broken, please report bug");
 
+	constexpr oneof() = default;
+
+	oneof(oneof&& other) noexcept
+	{
+		detail::rvisit_at(rep_.index = other.rep_.index,
+		                  [&](auto&& ra) {
+			                  using type = noref<decltype(ra)>;
+			                  new (&rep_.data) type(std::move(ra));
+			          },
+		                  other.rep_.data);
+	}
+
 	template <typename E, typename... Args>
 	E& emplace(Args&&... args)
 	{
 		constexpr int i = detail::find_alternative_v<E, oneof>;
-		using type =
-		    detail::choose_t<i, detail::variant_internal_t<T>...>;
+		using type = detail::choose_alternative_t<i, oneof>;
 
 		if (is_nothrow_constructible_v<type, Args...>)
 		{
