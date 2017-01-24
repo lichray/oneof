@@ -627,6 +627,13 @@ public:
 		}
 	}
 
+	template <typename A, disable_capturing<oneof, A> = 0>
+	oneof& operator=(A&& a)
+	{
+		emplace<std::decay_t<A>>(std::forward<A>(a));
+		return *this;
+	}
+
 	template <typename E, typename... Args>
 	E& emplace(Args&&... args)
 	{
@@ -669,6 +676,11 @@ public:
 	constexpr bool is() const noexcept
 	{
 		return rep_.index == detail::find_alternative_v<E, oneof>;
+	}
+
+	constexpr int which() const noexcept
+	{
+		return rep_.index;
 	}
 
 	template <typename E>

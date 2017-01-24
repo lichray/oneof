@@ -125,3 +125,20 @@ TEST_CASE("conversions")
 		REQUIRE(s.is<bool>());
 	}
 }
+
+TEST_CASE("convert assignment")
+{
+	stdex::oneof<int, std::string, bool> s;
+	REQUIRE(s.which() == 0);
+
+	s = true;
+	REQUIRE(s.which() == 2);
+
+	std::string v = "lvalue";
+	s = v;
+	REQUIRE(s.get<std::string>() == v);
+
+	stdex::oneof<int, bool, char const*> x;
+	x = "literal";
+	REQUIRE(x.which() == 2);
+}
