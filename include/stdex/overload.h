@@ -29,6 +29,12 @@
 
 namespace stdex
 {
+
+template <typename T, typename U>
+using disable_capturing =
+    std::enable_if_t<!std::is_base_of<T, std::remove_reference_t<U>>::value,
+                     int>;
+
 namespace detail
 {
 
@@ -42,9 +48,7 @@ struct overloaded<F, Fs...> : F, overloaded<Fs...>::type
 	using base = typename overloaded<Fs...>::type;
 
 	template <typename T, typename... Ts,
-	          typename Ft = std::remove_reference_t<T>,
-	          typename = std::enable_if_t<
-	              !std::is_base_of<overloaded, Ft>::value>>
+	          disable_capturing<overloaded, T> = 0>
 	constexpr overloaded(T&& head, Ts&&... tail)
 	    : F(std::forward<T>(head)), base(std::forward<Ts>(tail)...)
 	{

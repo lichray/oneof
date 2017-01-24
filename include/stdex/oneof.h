@@ -41,7 +41,6 @@ namespace stdex
 
 #if defined(_MSC_VER)
 using std::is_same_v;
-using std::is_base_of_v;
 using std::is_convertible_v;
 using std::is_constructible_v;
 using std::is_nothrow_default_constructible_v;
@@ -54,7 +53,6 @@ using std::is_trivially_default_constructible_v;
 using std::is_trivially_destructible_v;
 #else
 using std::experimental::is_same_v;
-using std::experimental::is_base_of_v;
 using std::experimental::is_convertible_v;
 using std::experimental::is_constructible_v;
 using std::experimental::is_nothrow_default_constructible_v;
@@ -136,9 +134,8 @@ public:
 		return *this;
 	}
 
-	template <typename A, typename Ar = noref<A>,
-	          enable_if_t<not is_base_of_v<indirection, Ar>, int> = 0,
-	          typename... As>
+	template <typename A, typename... As,
+	          disable_capturing<indirection, A> = 0>
 	explicit indirection(A&& a, As&&... as)
 	    : p_(new T(std::forward<A>(a), std::forward<As>(as)...))
 	{
@@ -545,8 +542,7 @@ public:
 		    other.rep_.data);
 	}
 
-	template <typename A, typename Ar = noref<A>,
-	          enable_if_t<not is_base_of_v<oneof, Ar>, int> = 0,
+	template <typename A, disable_capturing<oneof, A> = 0,
 	          typename E = detail::first_self_construct_t<
 	              A, detail::variant_element_t<T>...>>
 	oneof(A&& a)
@@ -558,8 +554,7 @@ public:
 		rep_.index = i;
 	}
 
-	template <typename A, typename Ar = noref<A>,
-	          enable_if_t<not is_base_of_v<oneof, Ar>, int> = 0,
+	template <typename A, disable_capturing<oneof, A> = 0,
 	          enable_if_t<not detail::any_self_construct_v<
 	                          A, detail::variant_element_t<T>...>,
 	                      int> = 0,
