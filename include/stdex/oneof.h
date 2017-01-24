@@ -317,8 +317,8 @@ struct first_self_construct
 
 template <typename A, typename T, typename... Ts>
 struct first_self_construct<
-    enable_if_t<is_constructible_v<T, A> and is_same_v<nocvref<A>, T>>, A, T,
-    Ts...>
+    enable_if_t<is_constructible_v<T, A> and is_same_v<std::decay_t<A>, T>>, A,
+    T, Ts...>
 {
 	using type = T;
 };

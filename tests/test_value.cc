@@ -138,7 +138,12 @@ TEST_CASE("convert assignment")
 	s = v;
 	REQUIRE(s.get<std::string>() == v);
 
-	stdex::oneof<int, bool, char const*> x;
+	stdex::oneof<int, bool, char const*> x = "string";
+	REQUIRE(x.which() == 2);
+
+	x = 1;
+	REQUIRE(x.which() == 0);
+
 	x = "literal";
 	REQUIRE(x.which() == 2);
 }
