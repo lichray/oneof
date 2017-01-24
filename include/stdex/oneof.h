@@ -51,6 +51,7 @@ using std::is_nothrow_move_assignable_v;
 using std::is_default_constructible_v;
 using std::is_trivially_default_constructible_v;
 using std::is_trivially_destructible_v;
+using std::is_lvalue_reference_v;
 #else
 using std::experimental::is_same_v;
 using std::experimental::is_convertible_v;
@@ -63,6 +64,7 @@ using std::experimental::is_nothrow_move_assignable_v;
 using std::experimental::is_default_constructible_v;
 using std::experimental::is_trivially_default_constructible_v;
 using std::experimental::is_trivially_destructible_v;
+using std::experimental::is_lvalue_reference_v;
 #endif
 
 using std::enable_if_t;
@@ -441,11 +443,18 @@ struct _rvisit_at<R, Low, High, Mid, enable_if_t<(Low > High)>>
 template <typename R, int Mid>
 struct _rvisit_at<R, Mid, Mid, Mid>
 {
-	template <typename Raw, typename F>
+	template <typename Raw, typename F,
+	          enable_if_t<is_lvalue_reference_v<Raw>, int> = 0>
 	static decltype(auto) apply(int n, F&& f, Raw&& tp)
 	{
-		return std::forward<F>(f)(
-		    std::forward<Raw>(tp).rget(index_c<Mid>));
+		return std::forward<F>(f)(tp.rget(index_c<Mid>));
+	}
+
+	template <typename Raw, typename F,
+	          enable_if_t<not is_lvalue_reference_v<Raw>, int> = 0>
+	static decltype(auto) apply(int n, F&& f, Raw&& tp)
+	{
+		return std::forward<F>(f)(std::move(tp.rget(index_c<Mid>)));
 	}
 };
 
@@ -664,17 +673,33 @@ public:
 	}
 
 	template <typename R = void, typename... F>
-	decltype(auto) match(F&&... f)
+	decltype(auto) match(F&&... f) &
 	{
 		return detail::rvisit_at<R>(
 		    rep_.index, overload(std::forward<F>(f)...), rep_.data);
 	}
 
 	template <typename R = void, typename... F>
-	decltype(auto) match(F&&... f) const
+	decltype(auto) match(F&&... f) const &
 	{
 		return detail::rvisit_at<R>(
 		    rep_.index, overload(std::forward<F>(f)...), rep_.data);
+	}
+
+	template <typename R = void, typename... F>
+	decltype(auto) match(F&&... f) &&
+	{
+		return detail::rvisit_at<R>(rep_.index,
+		                            overload(std::forward<F>(f)...),
+		                            std::move(rep_.data));
+	}
+
+	template <typename R = void, typename... F>
+	decltype(auto) match(F&&... f) const &&
+	{
+		return detail::rvisit_at<R>(rep_.index,
+		                            overload(std::forward<F>(f)...),
+		                            std::move(rep_.data));
 	}
 
 	template <typename E>

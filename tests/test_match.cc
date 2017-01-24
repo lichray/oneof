@@ -3,6 +3,7 @@
 #include <stdex/oneof.h>
 
 #include <string>
+#include <memory>
 
 TEST_CASE("match")
 {
@@ -27,4 +28,18 @@ TEST_CASE("match")
 
 	REQUIRE(i);
 	REQUIRE(s.get<std::string>() == "boat");
+}
+
+TEST_CASE("match move-only")
+{
+	stdex::oneof<std::unique_ptr<int>, double> s =
+	    std::make_unique<int>(42);
+	std::unique_ptr<int> p;
+
+	std::move(s).match(
+	    [&](std::unique_ptr<int>&& ip) { p = std::move(ip); },
+	    [](double) {});
+
+	REQUIRE(p);
+	REQUIRE(*p == 42);
 }
