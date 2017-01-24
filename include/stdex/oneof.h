@@ -34,7 +34,7 @@
 #endif
 #include <exception>
 #include <new>
-#include <assert.h>
+#include <stdlib.h>
 
 namespace stdex
 {
@@ -425,8 +425,8 @@ struct _rvisit_at<R, Low, High, Mid, enable_if_t<(Low > High)>>
 	[[noreturn]] static R apply(int, T&&...)
 	{
 #if !defined(NDEBUG)
-		assert(0);
-#elif defined(MSVC)
+		abort();
+#elif defined(_MSC_VER)
 		__assume(0);
 #else
 		__builtin_unreachable();
