@@ -74,12 +74,6 @@ struct bad_variant_access : std::exception
 {
 };
 
-template <typename U>
-using noref = std::remove_reference_t<U>;
-
-template <typename U>
-using nocvref = std::remove_cv_t<noref<U>>;
-
 namespace detail
 {
 
@@ -418,6 +412,12 @@ decltype(auto) rget(variant_storage<Ts...> const& v)
 	return v.rget(index_c<i>);
 }
 
+template <typename S, typename A>
+decltype(auto) get_like(S&& s, A const&)
+{
+	return detail::rget<A>(std::forward<S>(s));
+}
+
 template <typename R, int Low, int High, int Mid = (Low + High) / 2,
           typename = void>
 struct _rvisit_at;
@@ -470,7 +470,7 @@ struct _rvisit_at<R, Low, High, Mid, enable_if_t<(Low < High)>>
 template <typename R = void, typename Raw, typename F>
 inline decltype(auto) rvisit_at(int n, F&& f, Raw&& tp)
 {
-	constexpr int m = noref<Raw>::size;
+	constexpr int m = std::decay_t<Raw>::size;
 	return _rvisit_at<R, 0, m - 1>::apply(n, std::forward<F>(f),
 	                                      std::forward<Raw>(tp));
 }
@@ -580,13 +580,12 @@ public:
 	{
 		if (not trivial and rep_.index == other.rep_.index)
 		{
-			detail::rvisit_at(
-			    other.rep_.index,
-			    [&](auto&& ra) {
-				    using type = nocvref<decltype(ra)>;
-				    detail::rget<type>(rep_.data) = ra;
-			    },
-			    other.rep_.data);
+			detail::rvisit_at(other.rep_.index,
+			                  [&](auto&& ra) {
+				                  detail::get_like(rep_.data,
+				                                   ra) = ra;
+				          },
+			                  other.rep_.data);
 		}
 		else if (copy_storage)
 		{
@@ -616,14 +615,13 @@ public:
 	{
 		if (not trivial and rep_.index == other.rep_.index)
 		{
-			detail::rvisit_at(
-			    other.rep_.index,
-			    [&](auto&& ra) {
-				    using type = noref<decltype(ra)>;
-				    detail::rget<type>(rep_.data) =
-				        std::move(ra);
-			    },
-			    other.rep_.data);
+			detail::rvisit_at(other.rep_.index,
+			                  [&](auto&& ra) {
+				                  detail::get_like(rep_.data,
+				                                   ra) =
+				                      std::move(ra);
+				          },
+			                  other.rep_.data);
 
 			return *this;
 		}
@@ -728,8 +726,7 @@ public:
 			return false;
 		else
 			return v.match([&](auto&& x) {
-				using type = nocvref<decltype(x)>;
-				return x == detail::rget<type>(w.rep_.data);
+				return x == detail::get_like(w.rep_.data, x);
 			});
 	}
 
@@ -739,8 +736,7 @@ public:
 			return true;
 		else
 			return v.match([&](auto&& x) {
-				using type = nocvref<decltype(x)>;
-				return x != detail::rget<type>(w.rep_.data);
+				return x != detail::get_like(w.rep_.data, x);
 			});
 	}
 
