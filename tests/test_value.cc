@@ -5,7 +5,7 @@
 #include <vector>
 #include <string>
 
-TEST_CASE("value semantics")
+TEST_CASE("values")
 {
 	stdex::oneof<int, std::vector<int>, double> s;
 	auto v = s.emplace<std::vector<int>>(3u, 42);
@@ -48,6 +48,36 @@ TEST_CASE("value semantics")
 
 	REQUIRE(s.get<double>() == 0.5);
 	REQUIRE(s3.get<std::vector<int>>().size() == 2);
+}
+
+TEST_CASE("value semantics")
+{
+	stdex::oneof<int, std::string, double> s = 3.14;
+	auto s2 = s;
+
+	REQUIRE(s2 == s);
+	REQUIRE_FALSE(s2 != s);
+
+	s2 = 4.0;
+
+	REQUIRE(s2 != s);
+	REQUIRE_FALSE(s2 == s);
+
+	s2 = s;
+
+	REQUIRE(s2 == s);
+	REQUIRE_FALSE(s2 != s);
+
+	s2 = 3;
+
+	REQUIRE(s2 != s);
+	REQUIRE_FALSE(s2 == s);
+
+	using std::swap;
+	swap(s, s2);
+
+	REQUIRE(s2 != s);
+	REQUIRE_FALSE(s2 == s);
 }
 
 TEST_CASE("conversions")

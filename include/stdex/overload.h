@@ -61,6 +61,11 @@ struct overloaded<F, Fs...> : F, overloaded<Fs...>::type
 template <typename F>
 struct overloaded<F> : F
 {
+	template <typename T, disable_capturing<overloaded, T> = 0>
+	constexpr overloaded(T&& v) : F(std::forward<T>(v))
+	{
+	}
+
 	using type = F;
 	using F::operator();
 };

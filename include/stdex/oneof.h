@@ -411,6 +411,13 @@ decltype(auto) rget(variant_storage<Ts...>& v)
 	return v.rget(index_c<i>);
 }
 
+template <typename X, typename... Ts>
+decltype(auto) rget(variant_storage<Ts...> const& v)
+{
+	constexpr int i = directing_v<X, Ts...>;
+	return v.rget(index_c<i>);
+}
+
 template <typename R, int Low, int High, int Mid = (Low + High) / 2,
           typename = void>
 struct _rvisit_at;
@@ -713,6 +720,28 @@ public:
 	constexpr decltype(auto) get() const &&
 	{
 		return std::move(get<E>());
+	}
+
+	friend bool operator==(oneof const& v, oneof const& w)
+	{
+		if (v.which() != w.which())
+			return false;
+		else
+			return v.match([&](auto&& x) {
+				using type = nocvref<decltype(x)>;
+				return x == detail::rget<type>(w.rep_.data);
+			});
+	}
+
+	friend bool operator!=(oneof const& v, oneof const& w)
+	{
+		if (v.which() != w.which())
+			return true;
+		else
+			return v.match([&](auto&& x) {
+				using type = nocvref<decltype(x)>;
+				return x != detail::rget<type>(w.rep_.data);
+			});
 	}
 
 private:
