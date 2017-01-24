@@ -136,11 +136,13 @@ public:
 		return *this;
 	}
 
-	indirection(T const& v) : p_(new T(v)) {}
-	indirection(T&& v) : p_(new T(std::move(v))) {}
-
-	indirection& operator=(T const&) = delete;
-	indirection& operator=(T&&) = delete;
+	template <typename A, typename Ar = noref<A>,
+	          enable_if_t<not is_base_of_v<indirection, Ar>, int> = 0,
+	          typename... As>
+	explicit indirection(A&& a, As&&... as)
+	    : p_(new T(std::forward<A>(a), std::forward<As>(as)...))
+	{
+	}
 
 	~indirection() { delete p_; }
 

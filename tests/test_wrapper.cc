@@ -43,6 +43,12 @@ TEST_CASE("wrapper")
 
 	static_assert(stdex::is_nothrow_move_constructible_v<decltype(x)>, "");
 	static_assert(stdex::is_nothrow_move_assignable_v<decltype(x)>, "");
+
+	stdex::detail::indirection<std::string> y(4u, ' ');
+	REQUIRE(y.get() == "    ");
+
+	stdex::detail::indirection<std::string> z(std::string("pr"));
+	REQUIRE(z.get() == "pr");
 }
 
 TEST_CASE("traits")
