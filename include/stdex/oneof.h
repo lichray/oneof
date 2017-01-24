@@ -417,7 +417,7 @@ template <typename R, int Low, int High, int Mid = (Low + High) / 2,
 struct _rvisit_at;
 
 template <typename R, int Low, int High, int Mid>
-struct _rvisit_at<R, Low, High, Mid, std::enable_if_t<(Low > High)>>
+struct _rvisit_at<R, Low, High, Mid, enable_if_t<(Low > High)>>
 {
 	template <typename... T>
 	[[noreturn]] static R apply(int, T&&...)
@@ -464,7 +464,7 @@ struct _rvisit_at<R, Low, High, Mid, enable_if_t<(Low < High)>>
 template <typename R = void, typename Raw, typename F>
 inline decltype(auto) rvisit_at(int n, F&& f, Raw&& tp)
 {
-	constexpr int m = std::remove_reference_t<Raw>::size;
+	constexpr int m = noref<Raw>::size;
 	return _rvisit_at<R, 0, m - 1>::apply(n, std::forward<F>(f),
 	                                      std::forward<Raw>(tp));
 }
