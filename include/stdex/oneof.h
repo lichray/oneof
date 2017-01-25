@@ -178,10 +178,31 @@ struct variant_internal<T[]>
 };
 
 template <typename T>
+struct variant_unwrap_internal
+{
+	using type = T;
+};
+
+template <typename T>
+struct variant_unwrap_internal<indirection<T>>
+{
+	using type = T;
+};
+
+template <typename T>
+struct variant_unwrap_internal<indirection<T> const>
+{
+	using type = T const;
+};
+
+template <typename T>
 using variant_internal_t = typename variant_internal<T>::type;
 
 template <typename T>
 using variant_element_t = typename variant_internal<T>::element_type;
+
+template <typename T>
+using variant_unwrap_internal_t = typename variant_unwrap_internal<T>::type;
 
 template <bool union_default, bool trivial_dtor, typename... T>
 union variant_storage_rep;
@@ -401,23 +422,33 @@ struct variant_storage<T>
 };
 
 template <typename X, typename... Ts>
-decltype(auto) rget(variant_storage<Ts...>& v)
+auto uget(variant_storage<Ts...>& v) -> X&
 {
-	constexpr int i = directing_v<X, Ts...>;
+	constexpr int i = directing_v<X, variant_unwrap_internal_t<Ts>...>;
 	return v.rget(index_c<i>);
 }
 
 template <typename X, typename... Ts>
-decltype(auto) rget(variant_storage<Ts...> const& v)
+auto uget(variant_storage<Ts...> const& v) -> X const&
 {
-	constexpr int i = directing_v<X, Ts...>;
+	constexpr int i = directing_v<X, variant_unwrap_internal_t<Ts>...>;
 	return v.rget(index_c<i>);
+}
+
+template <int I, typename S>
+decltype(auto) uget(S&& s)
+{
+	using btype = std::remove_reference_t<decltype(s.rget(index_c<I>))>;
+	using cv_etype = variant_unwrap_internal_t<btype>;
+	using rtype = std::conditional_t<is_lvalue_reference_v<S>, cv_etype&,
+	                                 cv_etype&&>;
+	return static_cast<rtype>(static_cast<cv_etype&>(s.rget(index_c<I>)));
 }
 
 template <typename S, typename A>
 decltype(auto) get_like(S&& s, A const&)
 {
-	return detail::rget<A>(std::forward<S>(s));
+	return detail::uget<A>(std::forward<S>(s));
 }
 
 template <typename R, int Low, int High, int Mid = (Low + High) / 2,
@@ -443,18 +474,11 @@ struct _rvisit_at<R, Low, High, Mid, enable_if_t<(Low > High)>>
 template <typename R, int Mid>
 struct _rvisit_at<R, Mid, Mid, Mid>
 {
-	template <typename Raw, typename F,
-	          enable_if_t<is_lvalue_reference_v<Raw>, int> = 0>
+	template <typename Raw, typename F>
 	static decltype(auto) apply(int n, F&& f, Raw&& tp)
 	{
-		return std::forward<F>(f)(tp.rget(index_c<Mid>));
-	}
-
-	template <typename Raw, typename F,
-	          enable_if_t<not is_lvalue_reference_v<Raw>, int> = 0>
-	static decltype(auto) apply(int n, F&& f, Raw&& tp)
-	{
-		return std::forward<F>(f)(std::move(tp.rget(index_c<Mid>)));
+		return std::forward<F>(f)(
+		    detail::uget<Mid>(std::forward<Raw>(tp)));
 	}
 };
 
@@ -784,7 +808,7 @@ public:
 		if (v.which() != w.which())
 			return false;
 		else
-			return v.match([&](auto&& x) {
+			return v.match<bool>([&](auto&& x) {
 				return x == detail::get_like(w.rep_.data, x);
 			});
 	}
@@ -794,7 +818,7 @@ public:
 		if (v.which() != w.which())
 			return true;
 		else
-			return v.match([&](auto&& x) {
+			return v.match<bool>([&](auto&& x) {
 				return x != detail::get_like(w.rep_.data, x);
 			});
 	}
@@ -806,7 +830,7 @@ public:
 		else if (v.which() > w.which())
 			return false;
 		else
-			return v.match([&](auto&& x) {
+			return v.match<bool>([&](auto&& x) {
 				return x < detail::get_like(w.rep_.data, x);
 			});
 	}
@@ -818,7 +842,7 @@ public:
 		else if (v.which() > w.which())
 			return false;
 		else
-			return v.match([&](auto&& x) {
+			return v.match<bool>([&](auto&& x) {
 				return x <= detail::get_like(w.rep_.data, x);
 			});
 	}
@@ -830,7 +854,7 @@ public:
 		else if (v.which() < w.which())
 			return false;
 		else
-			return v.match([&](auto&& x) {
+			return v.match<bool>([&](auto&& x) {
 				return x > detail::get_like(w.rep_.data, x);
 			});
 	}
@@ -842,7 +866,7 @@ public:
 		else if (v.which() < w.which())
 			return false;
 		else
-			return v.match([&](auto&& x) {
+			return v.match<bool>([&](auto&& x) {
 				return x >= detail::get_like(w.rep_.data, x);
 			});
 	}
