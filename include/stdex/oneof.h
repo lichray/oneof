@@ -793,6 +793,54 @@ public:
 			});
 	}
 
+	friend bool operator<(oneof const& v, oneof const& w)
+	{
+		if (v.which() < w.which())
+			return true;
+		else if (v.which() > w.which())
+			return false;
+		else
+			return v.match([&](auto&& x) {
+				return x < detail::get_like(w.rep_.data, x);
+			});
+	}
+
+	friend bool operator<=(oneof const& v, oneof const& w)
+	{
+		if (v.which() < w.which())
+			return true;
+		else if (v.which() > w.which())
+			return false;
+		else
+			return v.match([&](auto&& x) {
+				return x <= detail::get_like(w.rep_.data, x);
+			});
+	}
+
+	friend bool operator>(oneof const& v, oneof const& w)
+	{
+		if (v.which() > w.which())
+			return true;
+		else if (v.which() < w.which())
+			return false;
+		else
+			return v.match([&](auto&& x) {
+				return x > detail::get_like(w.rep_.data, x);
+			});
+	}
+
+	friend bool operator>=(oneof const& v, oneof const& w)
+	{
+		if (v.which() > w.which())
+			return true;
+		else if (v.which() < w.which())
+			return false;
+		else
+			return v.match([&](auto&& x) {
+				return x >= detail::get_like(w.rep_.data, x);
+			});
+	}
+
 private:
 	detail::variant_layout<trivial, detail::variant_internal_t<T>...> rep_;
 };

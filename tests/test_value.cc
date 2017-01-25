@@ -4,6 +4,7 @@
 
 #include <vector>
 #include <string>
+#include <limits>
 
 TEST_CASE("values")
 {
@@ -52,32 +53,56 @@ TEST_CASE("values")
 
 TEST_CASE("value semantics")
 {
-	stdex::oneof<int, std::string, double> s = 3.14;
+	stdex::oneof<int, std::string, double> s = 4.0;
 	auto s2 = s;
 
 	REQUIRE(s2 == s);
 	REQUIRE_FALSE(s2 != s);
 
-	s2 = 4.0;
+	REQUIRE(s2 <= s);
+	REQUIRE(s2 >= s);
+	REQUIRE_FALSE(s2 < s);
+	REQUIRE_FALSE(s2 > s);
+
+	s2 = 5.0;
 
 	REQUIRE(s2 != s);
 	REQUIRE_FALSE(s2 == s);
+
+	REQUIRE(s2 > s);
+	REQUIRE(s2 >= s);
+	REQUIRE_FALSE(s2 < s);
+	REQUIRE_FALSE(s2 <= s);
 
 	s2 = s;
 
 	REQUIRE(s2 == s);
 	REQUIRE_FALSE(s2 != s);
 
-	s2 = 3;
+	s2 = 4;
 
 	REQUIRE(s2 != s);
 	REQUIRE_FALSE(s2 == s);
+
+	REQUIRE(s2 < s);
+	REQUIRE(s2 <= s);
+	REQUIRE_FALSE(s2 > s);
+	REQUIRE_FALSE(s2 >= s);
 
 	using std::swap;
 	swap(s, s2);
 
 	REQUIRE(s2 != s);
 	REQUIRE_FALSE(s2 == s);
+
+	s = std::numeric_limits<double>::quiet_NaN();
+
+	CHECK(s.is<double>());
+	CHECK(s2.is<double>());
+	CHECK_FALSE(s2.get<double>() < s.get<double>());
+	CHECK_FALSE(s2.get<double>() >= s.get<double>());
+	REQUIRE_FALSE(s2 < s);
+	REQUIRE_FALSE(s2 >= s);
 }
 
 TEST_CASE("conversions")
