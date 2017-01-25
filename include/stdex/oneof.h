@@ -506,10 +506,16 @@ struct variant_layout<true, T...>
 template <typename... T>
 struct variant_layout<false, T...>
 {
-	~variant_layout()
+	struct dtor
 	{
-		rvisit_at(index, [](auto&& a) { a.~auto(); }, data);
-	}
+		template <typename A>
+		void operator()(A const& a) const
+		{
+			a.~A();
+		}
+	};
+
+	~variant_layout() { rvisit_at(index, dtor(), data); }
 
 	int index = 0;
 	variant_storage<T...> data;
