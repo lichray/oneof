@@ -177,3 +177,28 @@ TEST_CASE("convert assignment")
 	x = "literal";
 	REQUIRE(x.which() == 2);
 }
+
+TEST_CASE("get pointer")
+{
+	stdex::oneof<int, std::string> s("str");
+
+	if (auto p = s.maybe<int>())
+		REQUIRE(0);
+	else
+		REQUIRE(!p);
+
+	if (auto p = s.maybe<std::string>())
+		REQUIRE(*p == "str");
+	else
+		REQUIRE(0);
+
+	stdex::oneof<int, long> const x = 3;
+
+	if (auto p = x.maybe<long>())
+	{
+		REQUIRE(0);
+		static_assert(stdex::is_same_v<decltype(*p), long const&>, "");
+	}
+	else
+		REQUIRE(x.maybe<int>());
+}

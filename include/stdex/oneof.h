@@ -745,6 +745,34 @@ public:
 		return std::move(get<E>());
 	}
 
+	template <typename E>
+	auto maybe() & -> E*
+	{
+		constexpr int i = detail::find_alternative_v<E, oneof>;
+		if (i != rep_.index)
+			return nullptr;
+
+		return std::addressof(
+		    static_cast<E&>(rep_.data.rget(detail::index_c<i>)));
+	}
+
+	template <typename E>
+	auto maybe() const & -> E const*
+	{
+		constexpr int i = detail::find_alternative_v<E, oneof>;
+		if (i != rep_.index)
+			return nullptr;
+
+		return std::addressof(
+		    static_cast<E const&>(rep_.data.rget(detail::index_c<i>)));
+	}
+
+	template <typename E>
+	auto maybe() && = delete;
+
+	template <typename E>
+	auto maybe() const && = delete;
+
 	friend bool operator==(oneof const& v, oneof const& w)
 	{
 		if (v.which() != w.which())
