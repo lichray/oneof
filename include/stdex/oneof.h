@@ -563,15 +563,6 @@ inline decltype(auto) rvisit_at(int n, F&& f, Raw&& tp)
 	                                      std::forward<Raw>(tp));
 }
 
-template <typename T, typename...>
-struct car
-{
-	using type = T;
-};
-
-template <typename... T>
-using car_t = typename car<T...>::type;
-
 template <bool all_trivial_dtor, typename... T>
 struct variant_layout;
 
