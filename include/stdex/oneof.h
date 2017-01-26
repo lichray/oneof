@@ -76,6 +76,9 @@ struct bad_variant_access : std::exception
 {
 };
 
+template <bool V>
+using bool_constant = std::integral_constant<bool, V>;
+
 namespace detail
 {
 
@@ -91,6 +94,22 @@ constexpr bool and_v =
 template <bool... Xs>
 constexpr bool or_v =
     not is_same_v<bool_seq<Xs...>, bool_seq<((void)Xs, false)...>>;
+
+namespace adl
+{
+using std::swap;
+
+struct is_nothrow_swappable_impl
+{
+	template <typename T>
+	static auto test(int)
+	    -> bool_constant<noexcept(swap(std::declval<T&>(),
+	                                   std::declval<T&>()))>;
+
+	template <typename>
+	static auto test(...) -> std::false_type;
+};
+}
 
 template <typename T>
 constexpr bool can_be_alternative_v = is_same_v<std::decay_t<T>, T>;
@@ -131,7 +150,7 @@ public:
 		else
 		{
 			indirection tmp{ other };
-			std::swap(p_, tmp.p_);
+			swap(*this, tmp);
 		}
 
 		return *this;
@@ -145,6 +164,11 @@ public:
 	}
 
 	~indirection() { delete p_; }
+
+	friend void swap(indirection& x, indirection& y) noexcept
+	{
+		std::swap(x.p_, y.p_);
+	}
 
 	operator T&() { return this->get(); }
 	operator T const&() const { return this->get(); }
@@ -578,6 +602,10 @@ struct variant_layout<false, T...>
 
 }
 
+template <typename T>
+constexpr bool is_nothrow_swappable_v =
+    decltype(detail::adl::is_nothrow_swappable_impl::test<T>(0))::value;
+
 template <typename... T>
 struct oneof
 {
@@ -597,6 +625,9 @@ private:
 
 	static constexpr bool move_through = detail::and_v<
 	    is_nothrow_move_assignable_v<detail::variant_internal_t<T>>...>;
+
+	static constexpr bool nothrow_swap = detail::and_v<
+	    is_nothrow_swappable_v<detail::variant_internal_t<T>>...>;
 
 	static_assert(move_storage, "library is broken, please report bug");
 
@@ -900,6 +931,20 @@ public:
 			return v.match<bool>([&](auto&& x) {
 				return x >= detail::get_like(w.rep_.data, x);
 			});
+	}
+
+	friend void swap(oneof& v, oneof& w) noexcept(nothrow_swap)
+	{
+		if (v.which() == w.which())
+			detail::rvisit_at(
+			    v.rep_.index,
+			    [&](auto&& x) {
+				    using std::swap;
+				    swap(x, detail::gut_like(w.rep_.data, x));
+			    },
+			    v.rep_.data);
+		else
+			std::swap(v, w);
 	}
 
 private:

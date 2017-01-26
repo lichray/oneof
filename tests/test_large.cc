@@ -63,6 +63,8 @@ TEST_CASE("large object access")
 TEST_CASE("large object swapping")
 {
 	stdex::oneof<int, arr_t> s = a;
+	static_assert(stdex::is_nothrow_swappable_v<decltype(s)>, "");
+
 	decltype(s) s2 = arr_t{};
 	decltype(s) s3 = 42;
 
