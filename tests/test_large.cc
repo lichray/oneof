@@ -6,7 +6,7 @@
 #include <string>
 
 using arr_t = std::array<char, 100>;
-arr_t const a = { 'a', 'k', 'b', '4', '8', '\0' };
+arr_t const a = { { 'a', 'k', 'b', '4', '8', '\0' } };
 
 TEST_CASE("large object access")
 {
