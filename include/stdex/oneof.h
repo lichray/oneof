@@ -126,7 +126,14 @@ public:
 
 	indirection& operator=(indirection const& other)
 	{
-		get() = other.get();
+		if (p_)
+			get() = other.get();
+		else
+		{
+			indirection tmp{ other };
+			std::swap(p_, tmp.p_);
+		}
+
 		return *this;
 	}
 
@@ -422,6 +429,18 @@ struct variant_storage<T>
 };
 
 template <typename X, typename... Ts>
+decltype(auto) rget(variant_storage<Ts...>& v)
+{
+	return v.rget(index_c<directing_v<X, Ts...>>);
+}
+
+template <typename X, typename... Ts>
+decltype(auto) rget(variant_storage<Ts...> const& v)
+{
+	return v.rget(index_c<directing_v<X, Ts...>>);
+}
+
+template <typename X, typename... Ts>
 auto uget(variant_storage<Ts...>& v) -> X&
 {
 	constexpr int i = directing_v<X, variant_unwrap_internal_t<Ts>...>;
@@ -436,13 +455,25 @@ auto uget(variant_storage<Ts...> const& v) -> X const&
 }
 
 template <int I, typename S>
-decltype(auto) uget(S&& s)
+decltype(auto) xget(S&& s, std::true_type)
 {
 	using btype = std::remove_reference_t<decltype(s.rget(index_c<I>))>;
 	using cv_etype = variant_unwrap_internal_t<btype>;
 	using rtype = std::conditional_t<is_lvalue_reference_v<S>, cv_etype&,
 	                                 cv_etype&&>;
 	return static_cast<rtype>(static_cast<cv_etype&>(s.rget(index_c<I>)));
+}
+
+template <int I, typename S>
+decltype(auto) xget(S&& s, std::false_type)
+{
+	return s.rget(index_c<I>);
+}
+
+template <typename S, typename A>
+decltype(auto) gut_like(S&& s, A const&)
+{
+	return detail::rget<A>(std::forward<S>(s));
 }
 
 template <typename S, typename A>
@@ -477,8 +508,8 @@ struct _rvisit_at<R, Mid, Mid, Mid>
 	template <typename Raw, typename F>
 	static decltype(auto) apply(int n, F&& f, Raw&& tp)
 	{
-		return std::forward<F>(f)(
-		    detail::uget<Mid>(std::forward<Raw>(tp)));
+		return std::forward<F>(f)(detail::xget<Mid>(
+		    std::forward<Raw>(tp), is_overload_call_wrapper<F>()));
 	}
 };
 
@@ -621,7 +652,7 @@ public:
 		{
 			detail::rvisit_at(other.rep_.index,
 			                  [&](auto&& ra) {
-				                  detail::get_like(rep_.data,
+				                  detail::gut_like(rep_.data,
 				                                   ra) = ra;
 				          },
 			                  other.rep_.data);
@@ -656,7 +687,7 @@ public:
 		{
 			detail::rvisit_at(other.rep_.index,
 			                  [&](auto&& ra) {
-				                  detail::get_like(rep_.data,
+				                  detail::gut_like(rep_.data,
 				                                   ra) =
 				                      std::move(ra);
 				          },

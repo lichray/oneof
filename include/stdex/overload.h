@@ -70,6 +70,22 @@ struct overloaded<F> : F
 	using F::operator();
 };
 
+template <typename T>
+struct is_overload_call_wrapper_impl : std::false_type
+{
+};
+
+template <typename... Ts>
+struct is_overload_call_wrapper_impl<overloaded<Ts...>> : std::true_type
+{
+};
+
+template <typename T>
+struct is_overload_call_wrapper
+    : is_overload_call_wrapper_impl<std::decay_t<T>>
+{
+};
+
 }
 
 template <typename... Fs>

@@ -41,6 +41,9 @@ TEST_CASE("wrapper")
 	auto x3 = std::move(x);
 	REQUIRE(x3.get().s == "assigned to");
 
+	x = x2;
+	REQUIRE(x.get().s == "copied to");
+
 	static_assert(stdex::is_nothrow_move_constructible_v<decltype(x)>, "");
 	static_assert(stdex::is_nothrow_move_assignable_v<decltype(x)>, "");
 
