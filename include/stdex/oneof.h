@@ -724,7 +724,9 @@ public:
 		}
 	}
 
-	template <typename A, disable_capturing<oneof, A> = 0>
+	template <typename A, disable_capturing<oneof, A> = 0,
+	          typename E = detail::first_self_construct_t<
+	              A, detail::variant_element_t<T>...>>
 	oneof& operator=(A&& a)
 	{
 		emplace<std::decay_t<A>>(std::forward<A>(a));

@@ -3,6 +3,7 @@
 #include <stdex/oneof.h>
 
 #include <string>
+#include <memory>
 
 TEST_CASE("default init")
 {
@@ -146,4 +147,16 @@ TEST_CASE("static features single")
 	static_assert(not stdex::is_default_constructible_v<F>, "");
 	static_assert(not stdex::is_nothrow_default_constructible_v<F>, "");
 	static_assert(not stdex::is_trivially_destructible_v<F>, "");
+}
+
+TEST_CASE("static properties")
+{
+	using A = stdex::oneof<int, std::unique_ptr<int>>;
+
+	static_assert(stdex::is_constructible_v<A, int>, "");
+	static_assert(stdex::is_constructible_v<A, long>, "");
+	static_assert(stdex::is_convertible_v<int, A>, "");
+	static_assert(not stdex::is_convertible_v<long, A>, "");
+	static_assert(std::is_assignable<A, int>::value, "");
+	static_assert(not std::is_assignable<A, long>::value, "");
 }
