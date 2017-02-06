@@ -79,6 +79,8 @@ struct bad_variant_access : std::exception
 template <bool V>
 using bool_constant = std::integral_constant<bool, V>;
 
+struct bottom;
+
 namespace detail
 {
 
@@ -526,8 +528,47 @@ struct _rvisit_at<R, Low, High, Mid, enable_if_t<(Low > High)>>
 	}
 };
 
+template <int Low, int High, int Mid>
+struct _rvisit_at<bottom, Low, High, Mid, enable_if_t<(Low > High)>>
+{
+	template <typename... T>
+	[[noreturn]] static auto apply(int, T&&... t) -> decltype(
+	    _rvisit_at<bottom, Mid, Mid, Mid>::apply(0, std::forward<T>(t)...))
+	{
+#if !defined(NDEBUG)
+		abort();
+#elif defined(_MSC_VER)
+		__assume(0);
+#else
+		__builtin_unreachable();
+#endif
+	}
+};
+
 template <typename R, int Mid>
 struct _rvisit_at<R, Mid, Mid, Mid>
+{
+	template <typename Raw, typename F>
+	static R apply(int n, F&& f, Raw&& tp)
+	{
+		return std::forward<F>(f)(detail::xget<Mid>(
+		    std::forward<Raw>(tp), is_overload_call_wrapper<F>()));
+	}
+};
+
+template <int Mid>
+struct _rvisit_at<void, Mid, Mid, Mid>
+{
+	template <typename Raw, typename F>
+	static void apply(int n, F&& f, Raw&& tp)
+	{
+		return void(std::forward<F>(f)(detail::xget<Mid>(
+		    std::forward<Raw>(tp), is_overload_call_wrapper<F>())));
+	}
+};
+
+template <int Mid>
+struct _rvisit_at<bottom, Mid, Mid, Mid>
 {
 	template <typename Raw, typename F>
 	static decltype(auto) apply(int n, F&& f, Raw&& tp)
@@ -555,7 +596,7 @@ struct _rvisit_at<R, Low, High, Mid, enable_if_t<(Low < High)>>
 	}
 };
 
-template <typename R = void, typename Raw, typename F>
+template <typename R = bottom, typename Raw, typename F>
 inline decltype(auto) rvisit_at(int n, F&& f, Raw&& tp)
 {
 	constexpr int m = std::decay_t<Raw>::size;
@@ -757,21 +798,21 @@ public:
 		}
 	}
 
-	template <typename R = void, typename... F>
+	template <typename R = bottom, typename... F>
 	decltype(auto) match(F&&... f) &
 	{
 		return detail::rvisit_at<R>(
 		    rep_.index, overload(std::forward<F>(f)...), rep_.data);
 	}
 
-	template <typename R = void, typename... F>
+	template <typename R = bottom, typename... F>
 	decltype(auto) match(F&&... f) const &
 	{
 		return detail::rvisit_at<R>(
 		    rep_.index, overload(std::forward<F>(f)...), rep_.data);
 	}
 
-	template <typename R = void, typename... F>
+	template <typename R = bottom, typename... F>
 	decltype(auto) match(F&&... f) &&
 	{
 		return detail::rvisit_at<R>(rep_.index,
@@ -779,7 +820,7 @@ public:
 		                            std::move(rep_.data));
 	}
 
-	template <typename R = void, typename... F>
+	template <typename R = bottom, typename... F>
 	decltype(auto) match(F&&... f) const &&
 	{
 		return detail::rvisit_at<R>(rep_.index,

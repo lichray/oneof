@@ -19,7 +19,7 @@ TEST_CASE("match")
 
 	s.emplace<std::string>("nice");
 
-	auto i = s.match<int>(
+	auto i = s.match(
 	    [](std::string& s) {
 		    s = "boat";
 		    return 1;
