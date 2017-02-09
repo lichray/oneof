@@ -51,6 +51,7 @@ using std::is_nothrow_move_assignable_v;
 using std::is_default_constructible_v;
 using std::is_trivially_default_constructible_v;
 using std::is_trivially_destructible_v;
+using std::is_trivially_copyable_v;
 using std::is_lvalue_reference_v;
 #else
 using std::experimental::is_same_v;
@@ -64,6 +65,7 @@ using std::experimental::is_nothrow_move_assignable_v;
 using std::experimental::is_default_constructible_v;
 using std::experimental::is_trivially_default_constructible_v;
 using std::experimental::is_trivially_destructible_v;
+using std::experimental::is_trivially_copyable_v;
 using std::experimental::is_lvalue_reference_v;
 #endif
 
@@ -610,6 +612,8 @@ struct variant_layout;
 template <typename... T>
 struct variant_layout<true, T...>
 {
+	static constexpr bool trivial = true;
+
 	int index;
 	variant_storage<T...> data;
 };
@@ -617,6 +621,8 @@ struct variant_layout<true, T...>
 template <typename... T>
 struct variant_layout<false, T...>
 {
+	static constexpr bool trivial = false;
+
 	struct dtor
 	{
 		template <typename A>
@@ -632,6 +638,105 @@ struct variant_layout<false, T...>
 	variant_storage<T...> data;
 };
 
+template <typename... T>
+using variant_layout_t = variant_layout<
+    and_v<is_trivially_destructible_v<variant_internal_t<T>>...>,
+    variant_internal_t<T>...>;
+
+template <bool all_trivially_copyable, typename... T>
+struct oneof_rep;
+
+template <typename... T>
+struct oneof_rep<true, T...> : variant_layout_t<T...>
+{
+};
+
+template <typename... T>
+struct oneof_rep<false, T...> : variant_layout_t<T...>
+{
+private:
+	static constexpr bool copy_storage =
+	    and_v<is_nothrow_copy_constructible_v<variant_internal_t<T>>...>;
+
+	static constexpr bool move_through =
+	    and_v<is_nothrow_move_assignable_v<variant_internal_t<T>>...>;
+
+public:
+	constexpr oneof_rep() = default;
+
+	oneof_rep(oneof_rep const& other)
+	{
+		rvisit_at(this->index = other.index,
+		          [&](auto&& ra) { new (&this->data) auto(ra); },
+		          other.data);
+	}
+
+	oneof_rep(oneof_rep&& other) noexcept
+	{
+		rvisit_at(
+		    this->index = other.index,
+		    [&](auto&& ra) { new (&this->data) auto(std::move(ra)); },
+		    other.data);
+	}
+
+	oneof_rep& operator=(oneof_rep const& other)
+	{
+		if (not this->trivial and this->index == other.index)
+		{
+			rvisit_at(
+			    other.index,
+			    [&](auto&& ra) { gut_like(this->data, ra) = ra; },
+			    other.data);
+		}
+		else if (copy_storage)
+		{
+			if (&other != this)
+			{
+				this->~oneof_rep();
+				return *new (this) oneof_rep{ other };
+			}
+		}
+		else
+		{
+			rvisit_at(other.index,
+			          [&](auto&& ra) {
+				          auto tmp = ra;
+				          this->~oneof_rep();
+				          new (&this->data) auto(
+				              std::move(tmp));
+				  },
+			          other.data);
+			this->index = other.index;
+		}
+
+		return *this;
+	}
+
+	oneof_rep& operator=(oneof_rep&& other) noexcept(move_through)
+	{
+		if (not this->trivial and this->index == other.index)
+		{
+			rvisit_at(other.index,
+			          [&](auto&& ra) {
+				          gut_like(this->data, ra) =
+				              std::move(ra);
+				  },
+			          other.data);
+
+			return *this;
+		}
+		else
+		{
+			this->~oneof_rep();
+			return *new (this) oneof_rep{ std::move(other) };
+		}
+	}
+};
+
+template <typename... T>
+using oneof_rep_t =
+    oneof_rep<and_v<is_trivially_copyable_v<variant_internal_t<T>>...>, T...>;
+
 }
 
 template <typename T>
@@ -646,17 +751,8 @@ struct oneof
 	              "reference, function, or array of known bound");
 
 private:
-	static constexpr bool trivial = detail::and_v<
-	    is_trivially_destructible_v<detail::variant_internal_t<T>>...>;
-
 	static constexpr bool move_storage = detail::and_v<
 	    is_nothrow_move_constructible_v<detail::variant_internal_t<T>>...>;
-
-	static constexpr bool copy_storage = detail::and_v<
-	    is_nothrow_copy_constructible_v<detail::variant_internal_t<T>>...>;
-
-	static constexpr bool move_through = detail::and_v<
-	    is_nothrow_move_assignable_v<detail::variant_internal_t<T>>...>;
 
 	static constexpr bool nothrow_swap = detail::and_v<
 	    is_nothrow_swappable_v<detail::variant_internal_t<T>>...>;
@@ -664,23 +760,11 @@ private:
 	static_assert(move_storage, "library is broken, please report bug");
 
 public:
-	constexpr oneof() = default;
-
-	oneof(oneof const& other)
-	{
-		detail::rvisit_at(
-		    rep_.index = other.rep_.index,
-		    [&](auto&& ra) { new (&rep_.data) auto(ra); },
-		    other.rep_.data);
-	}
-
-	oneof(oneof&& other) noexcept
-	{
-		detail::rvisit_at(
-		    rep_.index = other.rep_.index,
-		    [&](auto&& ra) { new (&rep_.data) auto(std::move(ra)); },
-		    other.rep_.data);
-	}
+	oneof() = default;
+	oneof(oneof const& other) = default;
+	oneof(oneof&& other) = default;
+	oneof& operator=(oneof const& other) = default;
+	oneof& operator=(oneof&& other) = default;
 
 	template <typename A, disable_capturing<oneof, A> = 0,
 	          typename E = detail::first_self_construct_t<
@@ -707,62 +791,6 @@ public:
 
 		new (&rep_.data) type(std::forward<A>(a));
 		rep_.index = i;
-	}
-
-	oneof& operator=(oneof const& other)
-	{
-		if (not trivial and rep_.index == other.rep_.index)
-		{
-			detail::rvisit_at(other.rep_.index,
-			                  [&](auto&& ra) {
-				                  detail::gut_like(rep_.data,
-				                                   ra) = ra;
-				          },
-			                  other.rep_.data);
-		}
-		else if (copy_storage)
-		{
-			if (&other != this)
-			{
-				this->~oneof();
-				return *new (this) oneof{ other };
-			}
-		}
-		else
-		{
-			detail::rvisit_at(other.rep_.index,
-			                  [&](auto&& ra) {
-				                  auto tmp = ra;
-				                  this->~oneof();
-				                  new (&rep_.data) auto(
-				                      std::move(tmp));
-				          },
-			                  other.rep_.data);
-			rep_.index = other.rep_.index;
-		}
-
-		return *this;
-	}
-
-	oneof& operator=(oneof&& other) noexcept(move_through)
-	{
-		if (not trivial and rep_.index == other.rep_.index)
-		{
-			detail::rvisit_at(other.rep_.index,
-			                  [&](auto&& ra) {
-				                  detail::gut_like(rep_.data,
-				                                   ra) =
-				                      std::move(ra);
-				          },
-			                  other.rep_.data);
-
-			return *this;
-		}
-		else
-		{
-			this->~oneof();
-			return *new (this) oneof{ std::move(other) };
-		}
 	}
 
 	template <typename A, disable_capturing<oneof, A> = 0,
@@ -982,7 +1010,7 @@ public:
 	}
 
 private:
-	detail::variant_layout<trivial, detail::variant_internal_t<T>...> rep_;
+	detail::oneof_rep_t<T...> rep_;
 };
 
 template <>

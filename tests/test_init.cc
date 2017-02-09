@@ -84,30 +84,35 @@ TEST_CASE("static features")
 	static_assert(stdex::is_default_constructible_v<A>, "");
 	static_assert(stdex::is_nothrow_default_constructible_v<A>, "");
 	static_assert(not stdex::is_trivially_destructible_v<A>, "");
+	static_assert(not stdex::is_trivially_copyable_v<A>, "");
 
 	using B = stdex::oneof<HardDefaultNothrow, double, long>;
 
 	static_assert(stdex::is_default_constructible_v<B>, "");
 	static_assert(stdex::is_nothrow_default_constructible_v<B>, "");
 	static_assert(stdex::is_trivially_destructible_v<B>, "");
+	static_assert(stdex::is_trivially_copyable_v<B>, "");
 
 	using C = stdex::oneof<HardDefault, long>;
 
 	static_assert(stdex::is_default_constructible_v<C>, "");
 	static_assert(not stdex::is_nothrow_default_constructible_v<C>, "");
 	static_assert(stdex::is_trivially_destructible_v<C>, "");
+	static_assert(stdex::is_trivially_copyable_v<C>, "");
 
 	using D = stdex::oneof<stdex::oneof<>, long>;
 
 	static_assert(not stdex::is_default_constructible_v<D>, "");
 	static_assert(not stdex::is_nothrow_default_constructible_v<D>, "");
 	static_assert(stdex::is_trivially_destructible_v<D>, "");
+	static_assert(stdex::is_trivially_copyable_v<D>, "");
 
 	using E = stdex::oneof<stdex::oneof<>, std::string>;
 
 	static_assert(not stdex::is_default_constructible_v<E>, "");
 	static_assert(not stdex::is_nothrow_default_constructible_v<E>, "");
 	static_assert(not stdex::is_trivially_destructible_v<E>, "");
+	static_assert(not stdex::is_trivially_copyable_v<E>, "");
 }
 
 TEST_CASE("static features single")
@@ -117,36 +122,42 @@ TEST_CASE("static features single")
 	static_assert(stdex::is_default_constructible_v<A>, "");
 	static_assert(stdex::is_nothrow_default_constructible_v<A>, "");
 	static_assert(stdex::is_trivially_destructible_v<A>, "");
+	static_assert(stdex::is_trivially_copyable_v<A>, "");
 
 	using B = stdex::oneof<HardDefaultNothrow>;
 
 	static_assert(stdex::is_default_constructible_v<B>, "");
 	static_assert(stdex::is_nothrow_default_constructible_v<B>, "");
 	static_assert(stdex::is_trivially_destructible_v<B>, "");
+	static_assert(stdex::is_trivially_copyable_v<B>, "");
 
 	using C = stdex::oneof<HardDefault>;
 
 	static_assert(stdex::is_default_constructible_v<C>, "");
 	static_assert(not stdex::is_nothrow_default_constructible_v<C>, "");
 	static_assert(stdex::is_trivially_destructible_v<C>, "");
+	static_assert(stdex::is_trivially_copyable_v<C>, "");
 
 	using D = stdex::oneof<stdex::oneof<>>;
 
 	static_assert(not stdex::is_default_constructible_v<D>, "");
 	static_assert(not stdex::is_nothrow_default_constructible_v<D>, "");
 	static_assert(stdex::is_trivially_destructible_v<D>, "");
+	static_assert(stdex::is_trivially_copyable_v<D>, "");
 
 	using E = stdex::oneof<HardDefaultUDestruct>;
 
 	static_assert(stdex::is_default_constructible_v<E>, "");
 	static_assert(not stdex::is_nothrow_default_constructible_v<E>, "");
 	static_assert(not stdex::is_trivially_destructible_v<E>, "");
+	static_assert(not stdex::is_trivially_copyable_v<E>, "");
 
 	using F = stdex::oneof<NoDefaultUDestruct>;
 
 	static_assert(not stdex::is_default_constructible_v<F>, "");
 	static_assert(not stdex::is_nothrow_default_constructible_v<F>, "");
 	static_assert(not stdex::is_trivially_destructible_v<F>, "");
+	static_assert(not stdex::is_trivially_copyable_v<F>, "");
 }
 
 TEST_CASE("static properties")
