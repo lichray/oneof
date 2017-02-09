@@ -49,6 +49,7 @@ using std::is_nothrow_copy_constructible_v;
 using std::is_nothrow_move_constructible_v;
 using std::is_nothrow_move_assignable_v;
 using std::is_default_constructible_v;
+using std::is_move_constructible_v;
 using std::is_trivially_default_constructible_v;
 using std::is_trivially_destructible_v;
 using std::is_trivially_copyable_v;
@@ -63,6 +64,7 @@ using std::experimental::is_nothrow_copy_constructible_v;
 using std::experimental::is_nothrow_move_constructible_v;
 using std::experimental::is_nothrow_move_assignable_v;
 using std::experimental::is_default_constructible_v;
+using std::experimental::is_move_constructible_v;
 using std::experimental::is_trivially_default_constructible_v;
 using std::experimental::is_trivially_destructible_v;
 using std::experimental::is_trivially_copyable_v;
@@ -70,6 +72,10 @@ using std::experimental::is_lvalue_reference_v;
 #endif
 
 using std::enable_if_t;
+using std::is_nothrow_copy_constructible;
+using std::is_nothrow_move_assignable;
+using std::is_trivially_copyable;
+using std::is_trivially_destructible;
 
 template <typename... T>
 struct oneof;
@@ -193,7 +199,8 @@ struct variant_internal_impl
 template <typename T>
 struct variant_internal_impl<
     T, enable_if_t<sizeof(variant_draft<T>) <= variant_bufsize and
-                   is_nothrow_move_constructible_v<T>>>
+                   (is_nothrow_move_constructible_v<T> or
+                    not is_move_constructible_v<T>)>>
 {
 	using type = T;
 };
@@ -638,10 +645,14 @@ struct variant_layout<false, T...>
 	variant_storage<T...> data;
 };
 
+template <template <typename...> class F, typename... T>
+constexpr bool alternatives_satisfy =
+    and_v<F<variant_internal_t<T>>::value...>;
+
 template <typename... T>
-using variant_layout_t = variant_layout<
-    and_v<is_trivially_destructible_v<variant_internal_t<T>>...>,
-    variant_internal_t<T>...>;
+using variant_layout_t =
+    variant_layout<alternatives_satisfy<is_trivially_destructible, T...>,
+                   variant_internal_t<T>...>;
 
 template <bool all_trivially_copyable, typename... T>
 struct oneof_rep;
@@ -656,10 +667,10 @@ struct oneof_rep<false, T...> : variant_layout_t<T...>
 {
 private:
 	static constexpr bool copy_storage =
-	    and_v<is_nothrow_copy_constructible_v<variant_internal_t<T>>...>;
+	    alternatives_satisfy<is_nothrow_copy_constructible, T...>;
 
 	static constexpr bool move_through =
-	    and_v<is_nothrow_move_assignable_v<variant_internal_t<T>>...>;
+	    alternatives_satisfy<is_nothrow_move_assignable, T...>;
 
 public:
 	constexpr oneof_rep() = default;
@@ -735,13 +746,18 @@ public:
 
 template <typename... T>
 using oneof_rep_t =
-    oneof_rep<and_v<is_trivially_copyable_v<variant_internal_t<T>>...>, T...>;
+    oneof_rep<alternatives_satisfy<is_trivially_copyable, T...>, T...>;
 
 }
 
 template <typename T>
 constexpr bool is_nothrow_swappable_v =
     decltype(detail::adl::is_nothrow_swappable_impl::test<T>(0))::value;
+
+template <typename T>
+struct is_nothrow_swappable : bool_constant<is_nothrow_swappable_v<T>>
+{
+};
 
 template <typename... T>
 struct oneof
@@ -751,13 +767,8 @@ struct oneof
 	              "reference, function, or array of known bound");
 
 private:
-	static constexpr bool move_storage = detail::and_v<
-	    is_nothrow_move_constructible_v<detail::variant_internal_t<T>>...>;
-
-	static constexpr bool nothrow_swap = detail::and_v<
-	    is_nothrow_swappable_v<detail::variant_internal_t<T>>...>;
-
-	static_assert(move_storage, "library is broken, please report bug");
+	static constexpr bool nothrow_swap =
+	    detail::alternatives_satisfy<is_nothrow_swappable, T...>;
 
 public:
 	oneof() = default;
