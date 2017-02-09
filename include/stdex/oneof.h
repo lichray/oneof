@@ -665,14 +665,6 @@ struct oneof_rep<true, T...> : variant_layout_t<T...>
 template <typename... T>
 struct oneof_rep<false, T...> : variant_layout_t<T...>
 {
-private:
-	static constexpr bool copy_storage =
-	    alternatives_satisfy<is_nothrow_copy_constructible, T...>;
-
-	static constexpr bool move_through =
-	    alternatives_satisfy<is_nothrow_move_assignable, T...>;
-
-public:
 	constexpr oneof_rep() = default;
 
 	oneof_rep(oneof_rep const& other)
@@ -699,7 +691,8 @@ public:
 			    [&](auto&& ra) { gut_like(this->data, ra) = ra; },
 			    other.data);
 		}
-		else if (copy_storage)
+		else if (alternatives_satisfy<is_nothrow_copy_constructible,
+		                              T...>)
 		{
 			if (&other != this)
 			{
@@ -723,7 +716,8 @@ public:
 		return *this;
 	}
 
-	oneof_rep& operator=(oneof_rep&& other) noexcept(move_through)
+	oneof_rep& operator=(oneof_rep&& other) noexcept(
+	    alternatives_satisfy<is_nothrow_move_assignable, T...>)
 	{
 		if (not this->trivial and this->index == other.index)
 		{
@@ -766,11 +760,6 @@ struct oneof
 	              "an alternative type must not be cv-qualified, "
 	              "reference, function, or array of known bound");
 
-private:
-	static constexpr bool nothrow_swap =
-	    detail::alternatives_satisfy<is_nothrow_swappable, T...>;
-
-public:
 	oneof() = default;
 	oneof(oneof const& other) = default;
 	oneof(oneof&& other) = default;
@@ -1006,7 +995,8 @@ public:
 			});
 	}
 
-	friend void swap(oneof& v, oneof& w) noexcept(nothrow_swap)
+	friend void swap(oneof& v, oneof& w) noexcept(
+	    detail::alternatives_satisfy<is_nothrow_swappable, T...>)
 	{
 		if (v.which() == w.which())
 			detail::rvisit_at(
