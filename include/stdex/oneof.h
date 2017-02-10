@@ -996,6 +996,7 @@ struct oneof
 	}
 
 	friend void swap(oneof& v, oneof& w) noexcept(
+	    noexcept(std::swap(v, w)) and
 	    detail::alternatives_satisfy<is_nothrow_swappable, T...>)
 	{
 		if (v.which() == w.which())
