@@ -171,3 +171,192 @@ TEST_CASE("static properties")
 	static_assert(std::is_assignable<A, int>::value, "");
 	static_assert(not std::is_assignable<A, long>::value, "");
 }
+
+struct Empty
+{
+};
+
+struct MoveOnly
+{
+	MoveOnly(MoveOnly&&) = default;
+	MoveOnly& operator=(MoveOnly&&) = default;
+	MoveOnly(MoveOnly const&) = delete;
+	MoveOnly& operator=(MoveOnly const&) = delete;
+};
+
+struct MoveCtorOnly
+{
+	MoveCtorOnly(MoveCtorOnly&&) = default;
+	MoveCtorOnly& operator=(MoveCtorOnly&&) = delete;
+	MoveCtorOnly(MoveCtorOnly const&) = delete;
+	MoveCtorOnly& operator=(MoveCtorOnly const&) = delete;
+};
+
+struct NoMove
+{
+	NoMove(NoMove&&) = delete;
+};
+
+struct NoMoveCtor
+{
+	NoMoveCtor(NoMoveCtor&&) = delete;
+	NoMoveCtor& operator=(NoMoveCtor&&) = default;
+};
+
+struct NontrivialCopy
+{
+	NontrivialCopy(NontrivialCopy const&) {}
+	NontrivialCopy& operator=(NontrivialCopy const&) = default;
+};
+
+struct NontrivialCopyCtorOnly
+{
+	NontrivialCopyCtorOnly(NontrivialCopyCtorOnly const&) noexcept {}
+	NontrivialCopyCtorOnly&
+	operator=(NontrivialCopyCtorOnly const&) = delete;
+	NontrivialCopyCtorOnly& operator=(NontrivialCopyCtorOnly&&) = default;
+};
+
+struct NontrivialMoveOnly
+{
+	NontrivialMoveOnly(NontrivialMoveOnly&&) noexcept {}
+	NontrivialMoveOnly& operator=(NontrivialMoveOnly&&) = default;
+	NontrivialMoveOnly(NontrivialMoveOnly const&) = delete;
+	NontrivialMoveOnly& operator=(NontrivialMoveOnly const&) = delete;
+};
+
+struct NontrivialMoveCtorOnly
+{
+	NontrivialMoveCtorOnly(NontrivialMoveCtorOnly&&) noexcept {}
+	NontrivialMoveCtorOnly& operator=(NontrivialMoveCtorOnly&&) = delete;
+	NontrivialMoveCtorOnly(NontrivialMoveCtorOnly const&) = delete;
+	NontrivialMoveCtorOnly&
+	operator=(NontrivialMoveCtorOnly const&) = delete;
+};
+
+struct HardMoveOnly
+{
+	HardMoveOnly(HardMoveOnly&&) {}
+	HardMoveOnly& operator=(HardMoveOnly&&) = default;
+	HardMoveOnly(HardMoveOnly const&) = delete;
+	HardMoveOnly& operator=(HardMoveOnly const&) = delete;
+};
+
+struct HardNoCopyCtor
+{
+	HardNoCopyCtor(HardNoCopyCtor&&) {}
+	HardNoCopyCtor& operator=(HardNoCopyCtor&&) { return *this; }
+	HardNoCopyCtor(HardNoCopyCtor const&) = delete;
+	HardNoCopyCtor& operator=(HardNoCopyCtor const&) { return *this; }
+};
+
+TEST_CASE("copy/move/swap")
+{
+	using A = stdex::oneof<int, Empty>;
+
+	static_assert(std::is_trivially_copy_constructible<A>::value, "");
+	static_assert(std::is_trivially_move_constructible<A>::value, "");
+	static_assert(std::is_trivially_copy_assignable<A>::value, "");
+	static_assert(std::is_trivially_move_assignable<A>::value, "");
+	static_assert(std::is_trivially_copyable<A>::value, "");
+	static_assert(stdex::is_nothrow_swappable_v<A>, "");
+
+	using B = stdex::oneof<int, MoveOnly>;
+
+	static_assert(not std::is_copy_constructible<B>::value, "");
+	static_assert(std::is_move_constructible<B>::value, "");
+	static_assert(not std::is_copy_assignable<B>::value, "");
+	static_assert(std::is_move_assignable<B>::value, "");
+	static_assert(std::is_trivially_copyable<B>::value, "");
+	static_assert(stdex::is_nothrow_swappable_v<B>, "");
+
+	using B2 = stdex::oneof<int, MoveCtorOnly>;
+
+	static_assert(not std::is_copy_constructible<B2>::value, "");
+	static_assert(std::is_move_constructible<B2>::value, "");
+	static_assert(not std::is_copy_assignable<B2>::value, "");
+	static_assert(not std::is_move_assignable<B2>::value, "");
+	static_assert(std::is_trivially_copyable<B2>::value, "");
+	static_assert(not std::is_move_assignable<MoveCtorOnly>::value, "");
+	static_assert(stdex::is_swappable_v<B2> ==
+	                  stdex::is_swappable_v<MoveCtorOnly>,
+	              "");
+
+	using B3 = stdex::oneof<int, NontrivialMoveOnly>;
+
+	static_assert(not std::is_copy_constructible<B3>::value, "");
+	static_assert(std::is_move_constructible<B3>::value, "");
+	static_assert(not std::is_copy_assignable<B3>::value, "");
+	static_assert(std::is_move_assignable<B3>::value, "");
+	static_assert(not std::is_trivially_copyable<B3>::value, "");
+	static_assert(stdex::is_nothrow_swappable_v<B3>, "");
+
+	using B4 = stdex::oneof<int, NontrivialMoveCtorOnly>;
+
+	static_assert(not std::is_copy_constructible<B4>::value, "");
+	static_assert(std::is_move_constructible<B4>::value, "");
+	static_assert(not std::is_copy_assignable<B4>::value, "");
+	static_assert(not std::is_move_assignable<B4>::value, "");
+	static_assert(not std::is_trivially_copyable<B4>::value, "");
+	static_assert(stdex::is_swappable_v<B4> ==
+	                  stdex::is_swappable_v<NontrivialMoveCtorOnly>,
+	              "");
+
+	using C = stdex::oneof<int, NoMove>;
+
+	static_assert(not std::is_copy_constructible<C>::value, "");
+	static_assert(not std::is_move_constructible<C>::value, "");
+	static_assert(not std::is_copy_assignable<C>::value, "");
+	static_assert(not std::is_move_assignable<C>::value, "");
+
+	using C2 = stdex::oneof<int, NoMoveCtor>;
+
+	static_assert(not std::is_copy_constructible<C2>::value, "");
+	static_assert(not std::is_move_constructible<C2>::value, "");
+	static_assert(not std::is_copy_assignable<C2>::value, "");
+	static_assert(not std::is_move_assignable<C2>::value, "");
+
+	using D = stdex::oneof<int, NontrivialCopy>;
+
+	static_assert(std::is_copy_constructible<D>::value, "");
+	static_assert(std::is_move_constructible<D>::value, "");
+	static_assert(std::is_copy_assignable<D>::value, "");
+	static_assert(std::is_move_assignable<D>::value, "");
+	static_assert(stdex::is_nothrow_swappable_v<D>, "");
+
+	using D2 = stdex::oneof<int, NontrivialCopyCtorOnly>;
+
+	static_assert(std::is_copy_constructible<D2>::value, "");
+	static_assert(std::is_move_constructible<D2>::value, "");
+	static_assert(not std::is_copy_assignable<D2>::value, "");
+	static_assert(std::is_move_assignable<D2>::value, "");
+	static_assert(stdex::is_nothrow_swappable_v<D2>, "");
+
+	using E = stdex::oneof<int, HardMoveOnly>;
+
+	static_assert(not std::is_copy_constructible<E>::value, "");
+	static_assert(std::is_move_constructible<E>::value, "");
+	static_assert(not std::is_copy_assignable<E>::value, "");
+	static_assert(std::is_move_assignable<E>::value, "");
+	static_assert(stdex::is_nothrow_swappable_v<E>, "");
+
+	using F = stdex::oneof<int, HardNoCopyCtor>;
+
+	static_assert(not std::is_copy_constructible<F>::value, "");
+	static_assert(std::is_move_constructible<F>::value, "");
+	static_assert(not std::is_copy_assignable<F>::value, "");
+	static_assert(std::is_move_assignable<F>::value, "");
+	static_assert(stdex::is_nothrow_swappable_v<F>, "");
+
+	struct Rec
+	{
+		std::unique_ptr<int> m;
+		stdex::oneof<Rec[], int> n;
+	};
+
+	static_assert(not std::is_copy_constructible<Rec>::value, "");
+	static_assert(std::is_move_constructible<Rec>::value, "");
+	static_assert(not std::is_copy_assignable<Rec>::value, "");
+	static_assert(std::is_move_assignable<Rec>::value, "");
+	static_assert(stdex::is_nothrow_swappable_v<Rec>, "");
+}

@@ -76,6 +76,10 @@ using std::is_nothrow_copy_constructible;
 using std::is_nothrow_move_assignable;
 using std::is_trivially_copyable;
 using std::is_trivially_destructible;
+using std::is_copy_constructible;
+using std::is_move_constructible;
+using std::is_copy_assignable;
+using std::is_move_assignable;
 
 template <typename... T>
 struct oneof;
@@ -88,6 +92,62 @@ template <bool V>
 using bool_constant = std::integral_constant<bool, V>;
 
 struct bottom;
+
+template <bool V>
+struct copy_constructible
+{
+};
+
+template <>
+struct copy_constructible<false>
+{
+	copy_constructible() = default;
+	copy_constructible(copy_constructible const&) = delete;
+	copy_constructible(copy_constructible&&) = default;
+	copy_constructible& operator=(copy_constructible const&) = default;
+	copy_constructible& operator=(copy_constructible&&) = default;
+};
+
+template <bool V>
+struct move_constructible
+{
+};
+
+template <>
+struct move_constructible<false>
+{
+	move_constructible() = default;
+	move_constructible(move_constructible&&) = delete;
+	move_constructible& operator=(move_constructible&&) = default;
+};
+
+template <bool V>
+struct copy_assignable
+{
+};
+
+template <>
+struct copy_assignable<false>
+{
+	copy_assignable() = default;
+	copy_assignable(copy_assignable const&) = default;
+	copy_assignable(copy_assignable&&) = default;
+	copy_assignable& operator=(copy_assignable const&) = delete;
+	copy_assignable& operator=(copy_assignable&&) = default;
+};
+
+template <bool V>
+struct move_assignable
+{
+};
+
+template <>
+struct move_assignable<false>
+{
+	move_assignable() = default;
+	move_assignable(move_assignable&&) = default;
+	move_assignable& operator=(move_assignable&&) = delete;
+};
 
 namespace detail
 {
@@ -105,6 +165,13 @@ template <bool... Xs>
 constexpr bool or_v =
     not is_same_v<bool_seq<Xs...>, bool_seq<((void)Xs, false)...>>;
 
+template <template <typename> class... F>
+struct both
+{
+	template <typename T>
+	using call = bool_constant<and_v<F<T>::value...>>;
+};
+
 namespace adl
 {
 using std::swap;
@@ -119,6 +186,14 @@ struct is_nothrow_swappable_impl
 	template <typename>
 	static auto test(...) -> std::false_type;
 };
+
+template <typename T, typename = void>
+constexpr bool is_swappable_impl = false;
+
+template <typename T>
+constexpr bool is_swappable_impl<T, decltype(void(swap(std::declval<T&>(),
+                                                       std::declval<T&>())))> =
+    true;
 }
 
 template <typename T>
@@ -210,6 +285,7 @@ struct variant_internal
 {
 	using type = typename variant_internal_impl<T>::type;
 	using element_type = T;
+	using model_type = T;
 };
 
 template <typename T>
@@ -217,6 +293,7 @@ struct variant_internal<T[]>
 {
 	using type = indirection<T>;
 	using element_type = T;
+	using model_type = type;
 };
 
 template <typename T>
@@ -242,6 +319,9 @@ using variant_internal_t = typename variant_internal<T>::type;
 
 template <typename T>
 using variant_element_t = typename variant_internal<T>::element_type;
+
+template <typename T>
+using variant_model_t = typename variant_internal<T>::model_type;
 
 template <typename T>
 using variant_unwrap_internal_t = typename variant_unwrap_internal<T>::type;
@@ -649,6 +729,9 @@ template <template <typename...> class F, typename... T>
 constexpr bool alternatives_satisfy =
     and_v<F<variant_internal_t<T>>::value...>;
 
+template <template <typename...> class F, typename... T>
+constexpr bool alternatives_featuring = and_v<F<variant_model_t<T>>::value...>;
+
 template <typename... T>
 using variant_layout_t =
     variant_layout<alternatives_satisfy<is_trivially_destructible, T...>,
@@ -753,8 +836,26 @@ struct is_nothrow_swappable : bool_constant<is_nothrow_swappable_v<T>>
 {
 };
 
+template <typename T>
+constexpr bool is_swappable_v = detail::adl::is_swappable_impl<T>;
+
+template <typename T>
+struct is_swappable : bool_constant<is_swappable_v<T>>
+{
+};
+
 template <typename... T>
 struct oneof
+    : private copy_constructible<
+          detail::alternatives_featuring<is_copy_constructible, T...>>,
+      private move_constructible<
+          detail::alternatives_featuring<is_move_constructible, T...>>,
+      private copy_assignable<detail::alternatives_featuring<
+          detail::both<is_copy_constructible, is_move_constructible,
+                       is_copy_assignable>::call,
+          T...>>,
+      private move_assignable<detail::alternatives_featuring<
+          detail::both<is_move_constructible, is_move_assignable>::call, T...>>
 {
 	static_assert(detail::and_v<detail::can_be_alternative_v<T>...>,
 	              "an alternative type must not be cv-qualified, "
@@ -995,7 +1096,11 @@ struct oneof
 			});
 	}
 
-	friend void swap(oneof& v, oneof& w) noexcept(
+	template <bool swappable = detail::alternatives_featuring<
+	              detail::both<is_move_constructible, is_move_assignable,
+	                           is_swappable>::call,
+	              T...>>
+	friend enable_if_t<swappable> swap(oneof& v, oneof& w) noexcept(
 	    noexcept(std::swap(v, w)) and
 	    detail::alternatives_satisfy<is_nothrow_swappable, T...>)
 	{
