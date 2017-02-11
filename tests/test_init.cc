@@ -305,8 +305,8 @@ TEST_CASE("copy/move/swap")
 	               std::is_trivially_copyable<MoveCtorOnly>::value),
 	              "");
 	static_assert(not std::is_move_assignable<MoveCtorOnly>::value, "");
-	static_assert(stdex::is_swappable_v<B2> ==
-	                  stdex::is_swappable_v<MoveCtorOnly>,
+	static_assert((stdex::is_swappable<B2>::value ==
+	               stdex::is_swappable<MoveCtorOnly>::value),
 	              "");
 
 	using B3 = stdex::oneof<int, NontrivialMoveOnly>;
@@ -325,8 +325,8 @@ TEST_CASE("copy/move/swap")
 	static_assert(not std::is_copy_assignable<B4>::value, "");
 	static_assert(not std::is_move_assignable<B4>::value, "");
 	static_assert(not std::is_trivially_copyable<B4>::value, "");
-	static_assert(stdex::is_swappable_v<B4> ==
-	                  stdex::is_swappable_v<NontrivialMoveCtorOnly>,
+	static_assert((stdex::is_swappable_v<B4> ==
+	               stdex::is_swappable_v<NontrivialMoveCtorOnly>),
 	              "");
 
 	using C = stdex::oneof<int, NoMove>;
