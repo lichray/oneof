@@ -34,6 +34,7 @@
 #endif
 #include <exception>
 #include <new>
+#include <limits>
 #include <stdlib.h>
 
 namespace stdex
@@ -54,6 +55,8 @@ using std::is_trivially_default_constructible_v;
 using std::is_trivially_destructible_v;
 using std::is_trivially_copyable_v;
 using std::is_lvalue_reference_v;
+using std::is_integral_v;
+using std::is_floating_point_v;
 #else
 using std::experimental::is_same_v;
 using std::experimental::is_convertible_v;
@@ -69,6 +72,8 @@ using std::experimental::is_trivially_default_constructible_v;
 using std::experimental::is_trivially_destructible_v;
 using std::experimental::is_trivially_copyable_v;
 using std::experimental::is_lvalue_reference_v;
+using std::experimental::is_integral_v;
+using std::experimental::is_floating_point_v;
 #endif
 
 using std::enable_if_t;
@@ -172,6 +177,13 @@ struct both
 	using call = bool_constant<and_v<F<T>::value...>>;
 };
 
+template <template <typename> class... F>
+struct either
+{
+	template <typename T>
+	using call = bool_constant<or_v<F<T>::value...>>;
+};
+
 namespace adl
 {
 using std::swap;
@@ -195,6 +207,79 @@ constexpr bool is_swappable_impl<T, decltype(void(swap(std::declval<T&>(),
                                                        std::declval<T&>())))> =
     true;
 }
+
+template <typename T, typename = void>
+constexpr bool is_unscoped_enum_v = false;
+
+template <typename T>
+constexpr bool is_unscoped_enum_v<T, enable_if_t<std::is_enum<T>::value>> =
+    is_convertible_v<T, std::underlying_type_t<T>>;
+
+template <typename T, typename V>
+constexpr bool cannot_represent_v = (std::numeric_limits<T>::min() <
+                                     std::numeric_limits<V>::min()) or
+                                    (std::numeric_limits<T>::max() >
+                                     std::numeric_limits<V>::max());
+
+template <typename From, typename To, typename = void>
+constexpr bool is_narrowing = false;
+
+template <typename From, typename To>
+constexpr bool is_narrowing<
+    From, To, enable_if_t<is_floating_point_v<From> and is_integral_v<To>>> =
+    true;
+
+template <>
+constexpr bool is_narrowing<long double, double> = true;
+
+template <>
+constexpr bool is_narrowing<long double, float> = true;
+
+template <>
+constexpr bool is_narrowing<double, float> = true;
+
+template <typename From, typename To>
+constexpr bool is_narrowing<
+    From, To,
+    enable_if_t<or_v<is_integral_v<From>, is_unscoped_enum_v<From>> and
+                is_floating_point_v<To>>> = true;
+
+template <typename From, typename To>
+constexpr bool is_narrowing<
+    From, To, enable_if_t<is_integral_v<From> and is_integral_v<To>>> =
+    cannot_represent_v<From, To>;
+
+template <typename From, typename To>
+constexpr bool is_narrowing<
+    From, To, enable_if_t<is_unscoped_enum_v<From> and is_integral_v<To>>> =
+    cannot_represent_v<std::underlying_type_t<From>, To>;
+
+template <typename From>
+constexpr bool is_narrowing<
+    From, bool,
+    enable_if_t<either<std::is_pointer, std::is_null_pointer,
+                       std::is_member_pointer>::call<From>::value>> = true;
+
+template <typename From, typename To>
+constexpr bool is_non_narrowing_convertible_v =
+    is_convertible_v<From, To> and
+    not is_narrowing<std::decay_t<From>, std::decay_t<To>>;
+
+template <typename T, typename... Ts>
+struct overloaded_ctor : overloaded_ctor<Ts...>
+{
+	using overloaded_ctor<Ts...>::test;
+
+	template <typename U>
+	static enable_if_t<is_non_narrowing_convertible_v<U, T>, T> test(T);
+};
+
+template <typename T>
+struct overloaded_ctor<T>
+{
+	template <typename U>
+	static enable_if_t<is_non_narrowing_convertible_v<U, T>, T> test(T);
+};
 
 template <typename T>
 constexpr bool can_be_alternative_v = is_same_v<std::decay_t<T>, T>;
@@ -427,64 +512,12 @@ struct directing<T>
 	static_assert(alignof(T) == 0, "type not found");
 };
 
-template <typename, typename A, typename... Ts>
-struct first_conv_construct
-{
-};
+template <typename... T>
+using variant_ctor = overloaded_ctor<variant_element_t<T>...>;
 
-template <typename A, typename T, typename... Ts>
-struct first_conv_construct<
-    enable_if_t<is_constructible_v<T, A> and is_convertible_v<A, T>>, A, T,
-    Ts...>
-{
-	using type = T;
-};
-
-template <typename X, typename A, typename T, typename... Ts>
-struct first_conv_construct<X, A, T, Ts...> : first_conv_construct<X, A, Ts...>
-{
-};
-
-template <typename A, typename... Ts>
-using first_conv_construct_t =
-    typename first_conv_construct<void, A, Ts...>::type;
-
-template <typename, typename A, typename... Ts>
-struct first_self_construct
-{
-};
-
-template <typename A, typename T, typename... Ts>
-struct first_self_construct<
-    enable_if_t<is_constructible_v<T, A> and is_same_v<std::decay_t<A>, T>>, A,
-    T, Ts...>
-{
-	using type = T;
-};
-
-template <typename X, typename A, typename T, typename... Ts>
-struct first_self_construct<X, A, T, Ts...> : first_self_construct<X, A, Ts...>
-{
-};
-
-template <typename A, typename... Ts>
-using first_self_construct_t =
-    typename first_self_construct<void, A, Ts...>::type;
-
-template <typename, typename A, typename... Ts>
-struct any_self_construct : std::false_type
-{
-};
-
-template <typename A, typename... Ts>
-struct any_self_construct<decltype(void(first_self_construct_t<A, Ts...>{})),
-                          A, Ts...> : std::true_type
-{
-};
-
-template <typename A, typename... Ts>
-constexpr bool any_self_construct_v =
-    any_self_construct<void, A, Ts...>::value;
+template <typename A, typename... T>
+using element_to_construct_t =
+    decltype(variant_ctor<T...>::template test<A>(std::declval<A>()));
 
 template <typename T, typename V>
 struct find_alternative;
@@ -868,8 +901,7 @@ struct oneof
 	oneof& operator=(oneof&& other) = default;
 
 	template <typename A, disable_capturing<oneof, A> = 0,
-	          typename E = detail::first_self_construct_t<
-	              A, detail::variant_element_t<T>...>>
+	          typename E = detail::element_to_construct_t<A, T...>>
 	oneof(A&& a)
 	{
 		constexpr int i = detail::find_alternative_v<E, oneof>;
@@ -880,26 +912,10 @@ struct oneof
 	}
 
 	template <typename A, disable_capturing<oneof, A> = 0,
-	          enable_if_t<not detail::any_self_construct_v<
-	                          A, detail::variant_element_t<T>...>,
-	                      int> = 0,
-	          typename E = detail::first_conv_construct_t<
-	              A, detail::variant_element_t<T>...>>
-	explicit oneof(A&& a)
-	{
-		constexpr int i = detail::find_alternative_v<E, oneof>;
-		using type = detail::choose_alternative_t<i, oneof>;
-
-		new (&rep_.data) type(std::forward<A>(a));
-		rep_.index = i;
-	}
-
-	template <typename A, disable_capturing<oneof, A> = 0,
-	          typename E = detail::first_self_construct_t<
-	              A, detail::variant_element_t<T>...>>
+	          typename E = detail::element_to_construct_t<A, T...>>
 	oneof& operator=(A&& a)
 	{
-		emplace<std::decay_t<A>>(std::forward<A>(a));
+		emplace<E>(std::forward<A>(a));
 		return *this;
 	}
 

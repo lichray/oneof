@@ -131,12 +131,12 @@ TEST_CASE("conversions")
 	}
 
 	{
-		T1 s("");
+		T1 s = "";
 		REQUIRE(s.is<std::string>());
 	}
 
 	{
-		T1 s('x');
+		T1 s = 'x';
 		REQUIRE(s.is<int>());
 	}
 
@@ -166,18 +166,17 @@ TEST_CASE("conversions")
 	}
 
 	{
-		T2 s("pointer");
-		REQUIRE(s.is<bool>());
+		T2 s = "pointer";
+		REQUIRE(s.is<std::string>());
 	}
 
-	{
-		T2 s(0);
-		REQUIRE(s.is<bool>());
-	}
+	static_assert(not stdex::is_constructible_v<T2, int>, "");
+	static_assert(not stdex::is_convertible_v<int, T2>, "");
+	static_assert(not std::is_assignable<T2, int>::value, "");
 
 	{
-		T2 s(0.f);
-		REQUIRE(s.is<bool>());
+		T2 s = 0.f;
+		REQUIRE(s.is<double>());
 	}
 }
 
@@ -196,10 +195,13 @@ TEST_CASE("convert assignment")
 	stdex::oneof<int, bool, char const*> x = "string";
 	REQUIRE(x.which() == 2);
 
-	x = 1;
+	x = short(1);
 	REQUIRE(x.which() == 0);
 
 	x = "literal";
+	REQUIRE(x.which() == 2);
+
+	x = nullptr;
 	REQUIRE(x.which() == 2);
 }
 
