@@ -28,6 +28,7 @@
 #include "overload.h"
 
 #if defined(_MSC_VER)
+#include <ciso646>
 #include <type_traits>
 #else
 #include <experimental/type_traits>
@@ -188,6 +189,7 @@ struct either
 	using call = bool_constant<or_v<F<T>::value...>>;
 };
 
+#if !(defined(_MSC_VER) && _HAS_CXX17)
 namespace adl
 {
 using std::swap;
@@ -211,6 +213,7 @@ constexpr bool is_swappable_impl<T, decltype(void(swap(std::declval<T&>(),
                                                        std::declval<T&>())))> =
     true;
 }
+#endif
 
 template <typename T, typename = void>
 constexpr bool is_unscoped_enum_v = false;
@@ -301,10 +304,9 @@ struct overloaded_ctor<T>
 };
 
 template <typename T>
-constexpr bool can_be_alternative_v = is_same_v<std::decay_t<T>, T>;
-
-template <typename T>
-constexpr bool can_be_alternative_v<T[]> = true;
+struct is_decayed : std::is_same<std::decay_t<T>, T>
+{
+};
 
 template <typename T>
 struct variant_draft
@@ -879,6 +881,15 @@ using oneof_rep_t =
 
 }
 
+#if defined(_MSC_VER) && _HAS_CXX17
+
+using std::is_nothrow_swappable_v;
+using std::is_nothrow_swappable;
+using std::is_swappable_v;
+using std::is_swappable;
+
+#else
+
 template <typename T>
 constexpr bool is_nothrow_swappable_v =
     decltype(detail::adl::is_nothrow_swappable_impl::test<T>(0))::value;
@@ -896,6 +907,8 @@ struct is_swappable : bool_constant<is_swappable_v<T>>
 {
 };
 
+#endif
+
 template <typename... T>
 struct oneof
     : private copy_constructible<
@@ -909,7 +922,7 @@ struct oneof
       private move_assignable<detail::alternatives_featuring<
           detail::both<is_move_constructible, is_move_assignable>::call, T...>>
 {
-	static_assert(detail::and_v<detail::can_be_alternative_v<T>...>,
+	static_assert(detail::alternatives_featuring<detail::is_decayed, T...>,
 	              "an alternative type must not be cv-qualified, "
 	              "reference, function, or array of known bound");
 

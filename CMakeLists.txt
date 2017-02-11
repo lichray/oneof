@@ -16,6 +16,8 @@ endif()
 if(NOT MSVC)
 	add_definitions(-Wall -Wconversion -Wsign-conversion -Wsign-compare)
 	set(CMAKE_CXX_EXTENSIONS OFF)
+else()
+	add_definitions(/std:c++latest)
 endif()
 
 include_directories(include)

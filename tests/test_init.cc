@@ -182,15 +182,17 @@ TEST_CASE("static properties")
 		Nope
 	};
 
-	using B = stdex::oneof<std::unique_ptr<int>, unsigned long>;
+	using B = stdex::oneof<bool, std::underlying_type_t<S>>;
 
 	static_assert(stdex::is_constructible_v<B, S>, "");
 	static_assert(stdex::is_convertible_v<S, B>, "");
 	static_assert(std::is_assignable<B, S>::value, "");
 
-	static_assert(not stdex::is_constructible_v<B, int>, "");
-	static_assert(not stdex::is_convertible_v<int, B>, "");
-	static_assert(not std::is_assignable<B, int>::value, "");
+	using C = stdex::oneof<std::unique_ptr<int>, unsigned long>;
+
+	static_assert(not stdex::is_constructible_v<C, int>, "");
+	static_assert(not stdex::is_convertible_v<int, C>, "");
+	static_assert(not std::is_assignable<C, int>::value, "");
 }
 
 struct Empty
@@ -288,7 +290,9 @@ TEST_CASE("copy/move/swap")
 	static_assert(std::is_move_constructible<B>::value, "");
 	static_assert(not std::is_copy_assignable<B>::value, "");
 	static_assert(std::is_move_assignable<B>::value, "");
-	static_assert(std::is_trivially_copyable<B>::value, "");
+	static_assert((std::is_trivially_copyable<B>::value ==
+	               std::is_trivially_copyable<MoveOnly>::value),
+	              "");
 	static_assert(stdex::is_nothrow_swappable_v<B>, "");
 
 	using B2 = stdex::oneof<int, MoveCtorOnly>;
@@ -297,7 +301,9 @@ TEST_CASE("copy/move/swap")
 	static_assert(std::is_move_constructible<B2>::value, "");
 	static_assert(not std::is_copy_assignable<B2>::value, "");
 	static_assert(not std::is_move_assignable<B2>::value, "");
-	static_assert(std::is_trivially_copyable<B2>::value, "");
+	static_assert((std::is_trivially_copyable<B2>::value ==
+	               std::is_trivially_copyable<MoveCtorOnly>::value),
+	              "");
 	static_assert(not std::is_move_assignable<MoveCtorOnly>::value, "");
 	static_assert(stdex::is_swappable_v<B2> ==
 	                  stdex::is_swappable_v<MoveCtorOnly>,
