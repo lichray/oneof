@@ -165,10 +165,15 @@ TEST_CASE("static properties")
 	using A = stdex::oneof<int, std::unique_ptr<int>>;
 
 	static_assert(stdex::is_constructible_v<A, int>, "");
-	static_assert(not stdex::is_constructible_v<A, unsigned>, "");
 	static_assert(stdex::is_convertible_v<int, A>, "");
-	static_assert(not stdex::is_convertible_v<unsigned, A>, "");
 	static_assert(std::is_assignable<A, int>::value, "");
+
+	static_assert(stdex::is_constructible_v<A, bool>, "");
+	static_assert(stdex::is_convertible_v<bool, A>, "");
+	static_assert(std::is_assignable<A, bool>::value, "");
+
+	static_assert(not stdex::is_constructible_v<A, unsigned>, "");
+	static_assert(not stdex::is_convertible_v<unsigned, A>, "");
 	static_assert(not std::is_assignable<A, unsigned>::value, "");
 
 	enum S
@@ -180,10 +185,11 @@ TEST_CASE("static properties")
 	using B = stdex::oneof<std::unique_ptr<int>, unsigned long>;
 
 	static_assert(stdex::is_constructible_v<B, S>, "");
-	static_assert(not stdex::is_constructible_v<B, int>, "");
 	static_assert(stdex::is_convertible_v<S, B>, "");
-	static_assert(not stdex::is_convertible_v<int, B>, "");
 	static_assert(std::is_assignable<B, S>::value, "");
+
+	static_assert(not stdex::is_constructible_v<B, int>, "");
+	static_assert(not stdex::is_convertible_v<int, B>, "");
 	static_assert(not std::is_assignable<B, int>::value, "");
 }
 

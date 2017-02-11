@@ -225,6 +225,9 @@ constexpr bool cannot_represent_v = (std::numeric_limits<T>::min() <
                                     (std::numeric_limits<T>::max() >
                                      std::numeric_limits<V>::max());
 
+template <typename V>
+constexpr bool cannot_represent_v<bool, V> = false;
+
 template <typename T, typename V>
 constexpr bool cannot_represent_v<
     T, V, enable_if_t<is_signed_v<T> and is_unsigned_v<V>>> = true;
@@ -232,7 +235,8 @@ constexpr bool cannot_represent_v<
 template <typename T, typename V>
 constexpr bool
     cannot_represent_v<T, V,
-                       enable_if_t<is_unsigned_v<T> and is_signed_v<V>>> =
+                       enable_if_t<is_unsigned_v<T> and is_signed_v<V> and
+                                   not is_same_v<T, bool>>> =
         (std::numeric_limits<T>::max() >
          std::make_unsigned_t<V>(std::numeric_limits<V>::max()));
 
