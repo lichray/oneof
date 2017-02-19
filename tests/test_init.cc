@@ -386,4 +386,15 @@ TEST_CASE("copy/move/swap")
 	static_assert(not std::is_copy_assignable<Rec>::value, "");
 	static_assert(std::is_move_assignable<Rec>::value, "");
 	static_assert(stdex::is_nothrow_swappable_v<Rec>, "");
+
+	using G = stdex::oneof<stdex::oneof<>, int>;
+
+	static_assert(not stdex::is_default_constructible_v<G>, "");
+	static_assert(not std::is_copy_constructible<G>::value, "");
+	static_assert(not std::is_move_constructible<G>::value, "");
+	static_assert(not std::is_copy_assignable<G>::value, "");
+	static_assert(not std::is_move_assignable<G>::value, "");
+	static_assert((stdex::is_swappable_v<G> ==
+	               stdex::is_swappable_v<stdex::oneof<>>),
+	              "");
 }

@@ -1172,6 +1172,8 @@ template <>
 struct oneof<>
 {
 	oneof() = delete;
+	oneof(oneof const&) = delete;
+	oneof& operator=(oneof const&) = delete;
 };
 
 }
