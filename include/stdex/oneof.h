@@ -916,8 +916,7 @@ struct oneof
       private move_constructible<
           detail::alternatives_featuring<is_move_constructible, T...>>,
       private copy_assignable<detail::alternatives_featuring<
-          detail::both<is_copy_constructible, is_move_constructible,
-                       is_copy_assignable>::call,
+          detail::both<is_copy_constructible, is_copy_assignable>::call,
           T...>>,
       private move_assignable<detail::alternatives_featuring<
           detail::both<is_move_constructible, is_move_assignable>::call, T...>>
