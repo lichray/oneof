@@ -329,7 +329,7 @@ public:
 	indirection& operator=(indirection&& other) noexcept
 	{
 		this->~indirection();
-		return *new (this) indirection{ std::move(other) };
+		return *::new ((void*)this) indirection{ std::move(other) };
 	}
 
 	indirection(indirection const& other) : indirection(other.get()) {}
@@ -806,17 +806,20 @@ struct oneof_rep<false, T...> : variant_layout_t<T...>
 
 	oneof_rep(oneof_rep const& other)
 	{
-		rvisit_at(this->index = other.index,
-		          [&](auto&& ra) { new (&this->data) auto(ra); },
-		          other.data);
+		rvisit_at(
+		    this->index = other.index,
+		    [&](auto&& ra) { ::new ((void*)&this->data) auto(ra); },
+		    other.data);
 	}
 
 	oneof_rep(oneof_rep&& other) noexcept
 	{
-		rvisit_at(
-		    this->index = other.index,
-		    [&](auto&& ra) { new (&this->data) auto(std::move(ra)); },
-		    other.data);
+		rvisit_at(this->index = other.index,
+		          [&](auto&& ra) {
+			          ::new ((void*)&this->data) auto(
+			              std::move(ra));
+			  },
+		          other.data);
 	}
 
 	oneof_rep& operator=(oneof_rep const& other)
@@ -834,7 +837,7 @@ struct oneof_rep<false, T...> : variant_layout_t<T...>
 			if (&other != this)
 			{
 				this->~oneof_rep();
-				return *new (this) oneof_rep{ other };
+				return *::new ((void*)this) oneof_rep{ other };
 			}
 		}
 		else
@@ -843,7 +846,7 @@ struct oneof_rep<false, T...> : variant_layout_t<T...>
 			          [&](auto&& ra) {
 				          auto tmp = ra;
 				          this->~oneof_rep();
-				          new (&this->data) auto(
+				          ::new ((void*)&this->data) auto(
 				              std::move(tmp));
 				  },
 			          other.data);
@@ -870,7 +873,8 @@ struct oneof_rep<false, T...> : variant_layout_t<T...>
 		else
 		{
 			this->~oneof_rep();
-			return *new (this) oneof_rep{ std::move(other) };
+			return *::new ((void*)this)
+			    oneof_rep{ std::move(other) };
 		}
 	}
 };
@@ -938,7 +942,7 @@ struct oneof
 		constexpr int i = detail::find_alternative_v<E, oneof>;
 		using type = detail::choose_alternative_t<i, oneof>;
 
-		new (&rep_.data) type(std::forward<A>(a));
+		::new ((void*)&rep_.data) type(std::forward<A>(a));
 		rep_.index = i;
 	}
 
@@ -959,8 +963,8 @@ struct oneof
 		if (is_nothrow_constructible_v<type, Args...>)
 		{
 			this->~oneof();
-			auto p =
-			    new (&rep_.data) type(std::forward<Args>(args)...);
+			auto p = ::new ((void*)&rep_.data)
+			    type(std::forward<Args>(args)...);
 			rep_.index = i;
 			return *p;
 		}
@@ -968,7 +972,8 @@ struct oneof
 		{
 			type tmp(std::forward<Args>(args)...);
 			this->~oneof();
-			auto p = new (&rep_.data) type(std::move(tmp));
+			auto p =
+			    ::new ((void*)&rep_.data) type(std::move(tmp));
 			rep_.index = i;
 			return *p;
 		}
