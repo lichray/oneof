@@ -3,6 +3,7 @@
 #include <stdex/oneof.h>
 
 #include <string>
+#include <ostream>
 #include <memory>
 
 TEST_CASE("default init")
@@ -48,11 +49,11 @@ TEST_CASE("emplace")
 
 	s.emplace<std::string>(6u, '+');
 	REQUIRE(s.get<std::string>() == "++++++");
-	REQUIRE_THROWS_AS(s.get<int>(), std::exception&);
+	REQUIRE_THROWS_AS(s.get<int>(), std::exception);
 
 	s.emplace<int>(10);
 	REQUIRE(s.get<int>() == 10);
-	REQUIRE_THROWS_AS(s.get<std::string>(), stdex::bad_variant_access&);
+	REQUIRE_THROWS_AS(s.get<std::string>(), stdex::bad_variant_access);
 }
 
 struct HardDefaultNothrow
