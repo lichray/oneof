@@ -16,6 +16,14 @@ TEST_CASE("default init")
 		stdex::oneof<double, int, R[]> rep;
 	} y;
 	(void)y;
+
+	struct D
+	{
+		D() = delete;
+	};
+	stdex::oneof<D, int> z = 3;
+	auto z2 = z;
+	z = std::move(z2);
 }
 
 TEST_CASE("value init")
@@ -194,6 +202,12 @@ TEST_CASE("static properties")
 	static_assert(not stdex::is_constructible_v<C, int>, "");
 	static_assert(not stdex::is_convertible_v<int, C>, "");
 	static_assert(not std::is_assignable<C, int>::value, "");
+
+	using D = stdex::oneof<NoDefaultUDestruct, int>;
+
+	static_assert(stdex::is_constructible_v<D, int>, "");
+	static_assert(stdex::is_convertible_v<int, D>, "");
+	static_assert(std::is_assignable<D, int>::value, "");
 }
 
 struct Empty

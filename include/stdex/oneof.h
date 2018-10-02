@@ -432,12 +432,20 @@ using variant_model_t = typename variant_internal<T>::model_type;
 template <typename T>
 using variant_unwrap_internal_t = typename variant_unwrap_internal<T>::type;
 
+constexpr struct uninitialized_t
+{
+	explicit uninitialized_t() = default;
+} uninitialized{};
+
 template <bool union_default, bool trivial_dtor, typename... T>
 union variant_storage_rep;
 
 template <typename T, typename... Ts>
 union variant_storage_rep<true, true, T, Ts...>
 {
+	variant_storage_rep() = default;
+	variant_storage_rep(uninitialized_t){};
+
 	T first;
 	std::aligned_union_t<1, Ts...> rest;
 };
@@ -451,6 +459,8 @@ union variant_storage_rep<false, true, T, Ts...>
 	{
 	}
 
+	variant_storage_rep(uninitialized_t){};
+
 	T first;
 	std::aligned_union_t<1, Ts...> rest;
 };
@@ -458,6 +468,8 @@ union variant_storage_rep<false, true, T, Ts...>
 template <typename T, typename... Ts>
 union variant_storage_rep<true, false, T, Ts...>
 {
+	variant_storage_rep() = default;
+	variant_storage_rep(uninitialized_t){};
 	~variant_storage_rep() {}
 
 	T first;
@@ -473,6 +485,7 @@ union variant_storage_rep<false, false, T, Ts...>
 	{
 	}
 
+	variant_storage_rep(uninitialized_t){};
 	~variant_storage_rep() {}
 
 	T first;
@@ -595,6 +608,9 @@ struct variant_storage<T>
 	constexpr auto& rget(index_t<0>) const noexcept { return u_; }
 
 	T u_;
+
+	variant_storage() = default;
+	variant_storage(uninitialized_t[1]){};
 };
 
 template <typename X, typename... Ts>
@@ -797,14 +813,24 @@ struct oneof_rep;
 template <typename... T>
 struct oneof_rep<true, T...> : variant_layout_t<T...>
 {
+	constexpr oneof_rep() = default;
+	oneof_rep(uninitialized_t)
+	    : variant_layout_t<T...>{ 0, { { { uninitialized } } } }
+	{
+	}
 };
 
 template <typename... T>
 struct oneof_rep<false, T...> : variant_layout_t<T...>
 {
 	constexpr oneof_rep() = default;
+	oneof_rep(uninitialized_t)
+	    : variant_layout_t<T...>{ 0, { { { uninitialized } } } }
+	{
+	}
 
 	oneof_rep(oneof_rep const& other)
+	    : variant_layout_t<T...>{ 0, { { { uninitialized } } } }
 	{
 		rvisit_at(
 		    this->index = other.index,
@@ -813,6 +839,7 @@ struct oneof_rep<false, T...> : variant_layout_t<T...>
 	}
 
 	oneof_rep(oneof_rep&& other) noexcept
+	    : variant_layout_t<T...>{ 0, { { { uninitialized } } } }
 	{
 		rvisit_at(this->index = other.index,
 		          [&](auto&& ra) {
@@ -937,7 +964,7 @@ struct oneof
 
 	template <typename A, disable_capturing<oneof, A> = 0,
 	          typename E = detail::element_to_construct_t<A, T...>>
-	oneof(A&& a)
+	oneof(A&& a) : rep_(detail::uninitialized)
 	{
 		constexpr int i = detail::find_alternative_v<E, oneof>;
 		using type = detail::choose_alternative_t<i, oneof>;
