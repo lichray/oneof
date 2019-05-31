@@ -27,7 +27,7 @@
 
 #include "overload.h"
 
-#if defined(_MSC_VER)
+#if defined(_MSC_VER) || __cplusplus > 201402L
 #include <ciso646>
 #include <type_traits>
 #else
@@ -41,7 +41,7 @@
 namespace stdex
 {
 
-#if defined(_MSC_VER)
+#if defined(_MSC_VER) || __cplusplus > 201402L
 using std::is_same_v;
 using std::is_convertible_v;
 using std::is_constructible_v;
@@ -679,6 +679,8 @@ struct _rvisit_at<R, Low, High, Mid, enable_if_t<(Low > High)>>
 	{
 #if !defined(NDEBUG)
 		abort();
+#elif defined(__NVCC__)
+		throw 1;
 #elif defined(_MSC_VER)
 		__assume(0);
 #else
@@ -696,6 +698,8 @@ struct _rvisit_at<bottom, Low, High, Mid, enable_if_t<(Low > High)>>
 	{
 #if !defined(NDEBUG)
 		abort();
+#elif defined(__NVCC__)
+		throw 1;
 #elif defined(_MSC_VER)
 		__assume(0);
 #else
@@ -1180,8 +1184,10 @@ struct oneof
 	                           is_swappable>::call,
 	              T...>>
 	friend enable_if_t<swappable> swap(oneof& v, oneof& w) noexcept(
-	    noexcept(std::swap(v, w)) and
-	    detail::alternatives_satisfy<is_nothrow_swappable, T...>)
+	    detail::alternatives_satisfy<
+	        detail::both<is_nothrow_move_assignable,
+	                     is_nothrow_swappable>::call,
+	        T...>)
 	{
 		if (v.which() == w.which())
 			detail::rvisit_at(
